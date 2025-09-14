@@ -78,7 +78,10 @@ def get_autostart():
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
 LOG_FILE = 'print_log.txt'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+try:
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+except Exception:
+    pass
 
 # 获取所有本地打印机
 PRINTERS = [p[2] for p in win32print.EnumPrinters(2)]
