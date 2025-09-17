@@ -1,4 +1,6 @@
-
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+ 
 import os
 from flask import Flask, request, render_template_string, send_from_directory, redirect, url_for
 # 打印相关
@@ -7,9 +9,9 @@ import win32api
 import subprocess
 from datetime import datetime
 # 托盘相关
-
-
-
+ 
+ 
+ 
 import threading
 import sys
 import pystray
@@ -32,14 +34,13 @@ def clean_old_files(folder=None, expire_seconds=3600):
                 except Exception:
                     pass
         time.sleep(600)  # 每10分钟检查一次
-
-# 兼容PyInstaller打包和源码运行的资源路径
+ 
 # 兼容PyInstaller打包和源码运行的资源路径
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
-
+ 
 # 获取本机局域网IP
 def get_local_ip():
     try:
@@ -50,7 +51,7 @@ def get_local_ip():
         return ip
     except Exception:
         return '127.0.0.1'
-
+ 
 # 开机自启注册表操作
 def set_autostart(enable=True):
     exe_path = sys.executable
@@ -64,7 +65,7 @@ def set_autostart(enable=True):
                 winreg.DeleteValue(regkey, name)
             except FileNotFoundError:
                 pass
-
+ 
 def get_autostart():
     key = r'Software\\Microsoft\\Windows\\CurrentVersion\\Run'
     name = 'PrintServerApp'
@@ -74,18 +75,15 @@ def get_autostart():
             return True if val else False
     except FileNotFoundError:
         return False
-
+ 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
 LOG_FILE = 'print_log.txt'
-try:
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-except Exception:
-    pass
-
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+ 
 # 获取所有本地打印机
 PRINTERS = [p[2] for p in win32print.EnumPrinters(2)]
-
+ 
 HTML = '''
 <!doctype html>
 <html lang="zh-cn">
@@ -147,7 +145,7 @@ HTML = '''
             <button type="submit" class="btn btn-primary px-4">上传并打印</button>
         </div>
     </form>
-
+ 
     <h4 class="mt-4">打印队列</h4>
     <table class="table table-sm table-hover align-middle">
         <thead class="table-light"><tr><th>文件名</th><th>操作</th></tr></thead>
@@ -160,7 +158,7 @@ HTML = '''
         {% endfor %}
         </tbody>
     </table>
-
+ 
     <h4 class="mt-4">打印日志</h4>
     <ul class="list-group log-list mb-0">
         {% for l in logs %}
@@ -172,25 +170,25 @@ HTML = '''
 </body>
 </html>
 '''
-
+ 
 # 允许的文件类型
 ALLOWED_EXT = {'pdf', 'jpg', 'jpeg', 'png', 'txt'}
-
+ 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXT
-
+ 
 ## PDF 也用 Windows 系统自带打印
-
+ 
 def log_print(filename, printer, copies, duplex, papersize, quality):
     with open(LOG_FILE, 'a', encoding='utf-8') as f:
         f.write(f"{datetime.now()} 打印: {filename} 打印机: {printer} 份数: {copies} 双面: {duplex} 纸张: {papersize} 质量: {quality}\n")
-
+ 
 def get_logs():
     if not os.path.exists(LOG_FILE):
         return []
     with open(LOG_FILE, 'r', encoding='utf-8') as f:
         return f.readlines()[-10:][::-1]
-
+ 
 @app.route('/', methods=['GET', 'POST'])
 def upload_file():
     files = os.listdir(UPLOAD_FOLDER)
@@ -202,17 +200,29 @@ def upload_file():
         papersize = request.form.get('papersize', 'A4')
         quality = request.form.get('quality', 'normal')
         uploaded_files = request.files.getlist('file')
+         
         for f in uploaded_files:
             if f and allowed_file(f.filename):
-                filepath = os.path.join(UPLOAD_FOLDER, f.filename)
+                # 确保文件名唯一，避免覆盖
+                filename = f.filename
+                filepath = os.path.join(UPLOAD_FOLDER, filename)
+                counter = 1
+                while os.path.exists(filepath):
+                    name, ext = os.path.splitext(filename)
+                    filepath = os.path.join(UPLOAD_FOLDER, f"{name}_{counter}{ext}")
+                    counter += 1
+                 
+                # 保存文件到uploads文件夹
                 f.save(filepath)
-                ext = f.filename.rsplit('.', 1)[1].lower()
+                ext = os.path.splitext(filepath)[1][1:].lower()
+                 
                 try:
-                    # 仅txt/jpg/png用低层API设置打印质量
                     if ext in {'txt', 'jpg', 'jpeg', 'png'}:
+                        # 使用win32print设置正确的打印机和参数
                         hprinter = win32print.OpenPrinter(printer)
                         pdc = win32print.GetPrinter(hprinter, 2)
                         devmode = pdc['pDevMode']
+                         
                         # 设置打印质量
                         if quality == 'high':
                             devmode.PrintQuality = -4  # DMRES_HIGH
@@ -220,9 +230,17 @@ def upload_file():
                             devmode.PrintQuality = 1200  # 1200dpi，部分驱动支持
                         else:
                             devmode.PrintQuality = -3  # DMRES_DRAFT/普通
-                        # 纸张大小、单双面等可在此扩展
+                         
+                        # 设置双面打印
+                        if hasattr(devmode, 'Duplex'):
+                            devmode.Duplex = duplex  # 1=单面, 2=长边翻转, 3=短边翻转
+                         
+                        # 更新打印机设置
+                        pdc['pDevMode'] = devmode
+                        win32print.SetPrinter(hprinter, 2, pdc, 0)
+                         
                         for _ in range(copies):
-                            hjob = win32print.StartDocPrinter(hprinter, 1, (f.filename, None, "RAW"))
+                            hjob = win32print.StartDocPrinter(hprinter, 1, (os.path.basename(filepath), None, "RAW"))
                             win32print.StartPagePrinter(hprinter)
                             with open(filepath, 'rb') as file_data:
                                 win32print.WritePrinter(hprinter, file_data.read())
@@ -230,22 +248,41 @@ def upload_file():
                             win32print.EndDocPrinter(hprinter)
                         win32print.ClosePrinter(hprinter)
                     else:
-                        # PDF等仍用ShellExecute
-                        hprinter = win32print.OpenPrinter(printer)
-                        for _ in range(copies):
-                            win32api.ShellExecute(0, "print", filepath, None, ".", 0)
-                        win32print.ClosePrinter(hprinter)
-                    log_print(f.filename, printer, copies, duplex, papersize, quality)
+                        # 对于PDF文件，使用正确的命令行方式打印到指定打印机
+                        # 检查系统是否安装了Acrobat Reader或其他PDF查看器
+                        pdf_viewers = [
+                            r"C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe",
+                            r"C:\Program Files\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe",
+                            r"C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe"
+                        ]
+                         
+                        pdf_viewer = None
+                        for viewer in pdf_viewers:
+                            if os.path.exists(viewer):
+                                pdf_viewer = viewer
+                                break
+                         
+                        if pdf_viewer:
+                            # 使用Adobe Reader命令行打印
+                            for _ in range(copies):
+                                subprocess.run([
+                                    pdf_viewer,
+                                    "/t", filepath, printer
+                                ], shell=False, check=True)
+                        else:
+                            # 回退到Windows默认打印方式
+                            print_cmd = f'Shell.Print "{filepath}" /d:"{printer}"' if sys.platform == 'win32' else f'lpr -P "{printer}" "{filepath}"'
+                            subprocess.run(f'powershell -Command "{print_cmd}"', shell=True, check=True)
+                     
+                    log_print(os.path.basename(filepath), printer, copies, duplex, papersize, quality)
                 except Exception as e:
-                    log_print(f.filename+" 打印失败:"+str(e), printer, copies, duplex, papersize, quality)
-                finally:
-                    try:
-                        os.remove(filepath)
-                    except Exception:
-                        pass
+                    error_msg = f"打印失败: {str(e)}"
+                    log_print(os.path.basename(filepath) + " " + error_msg, printer, copies, duplex, papersize, quality)
+                    # 可以考虑添加flash消息来显示错误
+         
         return redirect(url_for('upload_file'))
     return render_template_string(HTML, printers=PRINTERS, files=files, logs=logs)
-
+ 
 @app.route('/preview/<filename>')
 def preview_file(filename):
     ext = filename.rsplit('.', 1)[1].lower()
@@ -258,22 +295,22 @@ def preview_file(filename):
             return f'<pre>{f.read()}</pre>'
     else:
         return '不支持预览'
-
-
+ 
+ 
 def run_flask():
     app.run(host='0.0.0.0', port=5000)
-
-
+ 
+ 
 def on_quit(icon, item):
     icon.stop()
     os._exit(0)
-
+ 
 def on_toggle_autostart(icon, item):
     current = get_autostart()
     set_autostart(not current)
     # 刷新菜单
     icon.menu = build_menu(icon)
-
+ 
 def build_menu(icon):
     autostart = get_autostart()
     ip = get_local_ip()
@@ -283,13 +320,13 @@ def build_menu(icon):
         pystray.MenuItem('开机自启：' + ('已开启' if autostart else '未开启'), on_toggle_autostart),
         pystray.MenuItem('退出', on_quit)
     )
-
+ 
 def setup_tray():
     image = Image.open(resource_path('logo.ico'))
     icon = pystray.Icon('print_server', image, '内网打印服务')
     icon.menu = build_menu(icon)
     icon.run()
-
+ 
 if __name__ == '__main__':
     # 启动定期清理线程
     cleaner_thread = threading.Thread(target=clean_old_files, daemon=True)
