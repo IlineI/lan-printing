@@ -24,3 +24,6 @@
 - **Python版本**: 3.6+
 - **依赖库**: Flask, win32print, win32api, pystray, PIL等
 - **权限要求**: 网络配置功能需要管理员权限 
+
+## 截图
+![App Screenshot](https://s21.ax1x.com/2025/09/21/pV4cCbd.png)
