@@ -16,7 +16,7 @@ from datetime import datetime
 import threading
 import sys
 import pystray
-from PIL import Image
+from PIL import Image, ImageDraw
 import socket
 import winreg
 import time
@@ -383,7 +383,8 @@ HTML = '''
         .btn-primary { color: #fff; background-color: #007bff; border-color: #007bff; }
         .btn-outline-secondary { color: #6c757d; border-color: #6c757d; background-color: transparent; }
         .btn-warning { color: #212529; background-color: #ffc107; border-color: #ffc107; }
-        .form-control { display: block; width: 100%; padding: 6px 12px; font-size: 14px; line-height: 1.42857143; color: #555; background-color: #fff; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .form-control { display: block; width: 100%; padding: 6px 12px; font-size: 14px; line-height: 1.42857143; color: #555; background-color: #fff; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; outline: none; transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
+        .form-control:focus { border-color: #007bff; box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25); }
         .form-select { background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e"); }
         .alert { padding: 15px; margin-bottom: 20px; border: 1px solid transparent; border-radius: 4px; }
         .alert-success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
@@ -437,6 +438,92 @@ HTML = '''
         .tab-content { margin-top: 20px; }
         .ip-status { padding: 15px; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px; }
         .ip-status .badge { font-size: 0.9em; }
+        
+        /* 拖拽文件区域样式 */
+        .file-drop-area {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            background-color: #f9f9f9;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+        
+        .file-drop-area:hover {
+            border-color: #007bff;
+            background-color: #e3f2fd;
+        }
+        
+        .file-drop-area.drag-over {
+            border-color: #007bff;
+            background-color: #e3f2fd;
+            transform: scale(1.02);
+        }
+        
+        .file-drop-area .drop-icon {
+            font-size: 48px;
+            color: #6c757d;
+            margin-bottom: 15px;
+        }
+        
+        .file-drop-area.drag-over .drop-icon {
+            color: #007bff;
+        }
+        
+        .file-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 15px;
+            background-color: #fff;
+        }
+        
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            border-bottom: 1px solid #eee;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            margin-bottom: 5px;
+        }
+        
+        .file-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .file-item .file-name {
+            font-weight: 500;
+            color: #495057;
+            flex-grow: 1;
+            margin-right: 10px;
+        }
+        
+        .file-item .file-size {
+            color: #6c757d;
+            font-size: 0.9em;
+            margin-right: 10px;
+        }
+        
+        .file-item .remove-btn {
+            background: none;
+            border: none;
+            color: #dc3545;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        
+        .file-item .remove-btn:hover {
+            background-color: #dc3545;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -534,12 +621,26 @@ HTML = '''
                     </select>
                 </div>
                 <div class="col-md-8">
-                    <label class="form-label">选择文件（支持PDF/JPG/PNG/DOC/DOCX/PPT/PPTX/XLS/XLSX/TXT，支持多选）</label>
-                    <input type="file" name="file" multiple class="form-control">
+                    <label class="form-label">选择文件（支持PDF/JPG/PNG/DOC/DOCX/PPT/PPTX/XLS/XLSX/TXT，支持多选和拖拽）</label>
+                    
+                    <!-- 拖拽上传区域 -->
+                    <div class="file-drop-area" id="fileDropArea">
+                        <div class="drop-icon">📁</div>
+                        <h5>拖拽文件到此处</h5>
+                        <p>或者 <strong>点击选择文件</strong></p>
+                        <p class="text-muted small">支持多个文件同时上传</p>
+                        <input type="file" name="file" multiple class="form-control" id="fileInput" style="display: none;">
+                    </div>
+                    
+                    <!-- 选中的文件列表 -->
+                    <div class="file-list" id="fileList" style="display: none;">
+                        <h6>已选择的文件：</h6>
+                        <div id="selectedFiles"></div>
+                    </div>
                 </div>
                 <div class="col-12 text-end">
                     {% if printers %}
-                        <button type="submit" class="btn btn-primary px-4">上传并打印</button>
+                        <button type="submit" class="btn btn-primary px-4" id="printButton">上传并打印</button>
                     {% else %}
                         <button type="button" class="btn btn-secondary px-4" disabled title="无可用打印机">无法打印 - 请检查打印机</button>
                     {% endif %}
@@ -560,18 +661,33 @@ HTML = '''
                     <li><strong>🔄 备用方案:</strong> 如果主要方法失败，系统会自动尝试备用打印方案</li>
                 </ul>
             </div>
-            
-            <!-- 智能打印机检测 -->
-            <div class="alert alert-success">
-                <h6><i class="bi bi-check-circle"></i> 智能参数应用</h6>
-                <p class="mb-0 small">系统现在完全使用获取到的真实打印机参数：</p>
-                <ul class="mb-0 small mt-2">
-                    <li><strong>实时检测:</strong> 切换打印机时自动获取其支持的纸张大小、打印质量等参数</li>
-                    <li><strong>参数应用:</strong> 直接使用您选择的打印设置，包括双面、纸张大小、打印质量</li>
-                    <li><strong>智能匹配:</strong> 只显示当前打印机实际支持的选项，确保参数有效</li>
-                    <li><strong>设备模式:</strong> 通过Windows设备模式直接设置打印参数</li>
-                    <li><strong>离线支持:</strong> 即使在未联网状态下，程序也能正常工作并使用默认配置</li>
+
+            <!-- 环境状态提示 -->
+            {% if env_status %}
+            <div class="alert alert-{{env_status.type}}">
+                <h6><i class="bi bi-{{env_status.icon}}"></i> {{env_status.title}}</h6>
+                <div class="small">{{env_status.message|safe}}</div>
+            </div>
+            {% endif %}
+            <div class="alert alert-info">
+                <h6><i class="bi bi-lightbulb"></i> 新功能特性</h6>
+                <ul class="mb-0 small">
+                    <li><strong>🖱️ 拖拽上传:</strong> 支持直接拖拽文件到上传区域，无需点击选择</li>
+                    <li><strong>📁 多文件上传:</strong> 可同时选择多个文件进行批量打印</li>
+                    <li><strong>🔄 动态端口:</strong> 支持通过托盘图标更改服务端口</li>
+                    <li><strong>🛡️ 智能检测:</strong> 自动检测虚拟打印机并过滤，只显示物理打印机</li>
+                    <li><strong>💾 自动清理:</strong> 上传的文件会在10分钟后自动清理，节省磁盘空间</li>
+                    <li><strong>📱 移动友好:</strong> 响应式设计，支持手机、平板访问</li>
                 </ul>
+            </div>
+            
+            <div class="alert alert-warning">
+                <h6><i class="bi bi-info-circle"></i> 高级打印功能提示</h6>
+                <div class="small">
+                    如需使用<strong>横版打印</strong>或<strong>自定义页码范围</strong>或<strong>布局调整</strong>等高级功能，请先使用 
+                    <strong>Microsoft Office</strong> 或 <strong>WPS Office</strong> 等办公软件在本地进行编辑后，再发送到此服务进行打印。
+                    这样可以获得最佳的打印效果！📝✨
+                </div>
             </div>
 
             <h4 class="mt-4">打印队列</h4>
@@ -808,6 +924,8 @@ function refreshPrinterInfo() {
 // 添加表单提交验证
 document.addEventListener('DOMContentLoaded', function() {
     const uploadForm = document.querySelector('form[enctype="multipart/form-data"]');
+    const printButton = document.getElementById('printButton');
+    
     if (uploadForm) {
         uploadForm.addEventListener('submit', function(e) {
             const printerSelect = document.getElementById('printerSelect');
@@ -816,7 +934,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // 检查是否选择了有效的打印机
             if (!selectedPrinter || selectedPrinter === '' || selectedPrinter === '未检测到可用打印机') {
                 e.preventDefault();
-                alert('请先选择一个有效的打印机！\n\n如果没有看到打印机，请检查：\n1. 打印机是否正确连接\n2. 打印机驱动是否安装\n3. 打印机是否处于联机状态');
+                alert('请先选择一个有效的打印机！\\n\\n如果没有看到打印机，请检查：\\n1. 打印机是否正确连接\\n2. 打印机驱动是否安装\\n3. 打印机是否处于联机状态');
                 return false;
             }
             
@@ -824,9 +942,23 @@ document.addEventListener('DOMContentLoaded', function() {
             const fileInput = document.querySelector('input[type="file"]');
             if (fileInput && fileInput.files.length === 0) {
                 e.preventDefault();
-                alert('请选择要打印的文件！');
+                alert('请选择要打印的文件！\\n\\n您可以：\\n1. 点击拖拽区域选择文件\\n2. 直接拖拽文件到上传区域');
                 return false;
             }
+            
+            // 显示加载状态
+            if (printButton) {
+                printButton.disabled = true;
+                printButton.innerHTML = '🔄 处理中...';
+                
+                // 5秒后恢复按钮状态（防止页面未刷新）
+                setTimeout(() => {
+                    printButton.disabled = false;
+                    printButton.innerHTML = '上传并打印';
+                }, 5000);
+            }
+            
+            return true;
         });
     }
 });
@@ -903,7 +1035,151 @@ document.addEventListener('DOMContentLoaded', function() {
         refreshPrinterInfo();
         printerSelect.addEventListener('change', refreshPrinterInfo);
     }
+    
+    // 初始化拖拽文件功能
+    initFileDragDrop();
 });
+
+// 拖拽文件功能
+function initFileDragDrop() {
+    const dropArea = document.getElementById('fileDropArea');
+    const fileInput = document.getElementById('fileInput');
+    const fileList = document.getElementById('fileList');
+    const selectedFiles = document.getElementById('selectedFiles');
+    
+    if (!dropArea || !fileInput) return;
+    
+    let currentFiles = [];
+    
+    // 支持的文件类型
+    const allowedTypes = ['pdf', 'jpg', 'jpeg', 'png', 'txt', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'];
+    
+    // 点击区域触发文件选择
+    dropArea.addEventListener('click', function(e) {
+        e.preventDefault();
+        fileInput.click();
+    });
+    
+    // 文件输入框变化
+    fileInput.addEventListener('change', function(e) {
+        const files = Array.from(e.target.files);
+        addFiles(files);
+    });
+    
+    // 阻止默认的拖拽行为
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false);
+    });
+    
+    // 高亮拖拽区域
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropArea.addEventListener(eventName, highlight, false);
+    });
+    
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, unhighlight, false);
+    });
+    
+    // 处理拖拽文件
+    dropArea.addEventListener('drop', handleDrop, false);
+    
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    function highlight() {
+        dropArea.classList.add('drag-over');
+        dropArea.querySelector('.drop-icon').textContent = '📤';
+    }
+    
+    function unhighlight() {
+        dropArea.classList.remove('drag-over');
+        dropArea.querySelector('.drop-icon').textContent = '📁';
+    }
+    
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = Array.from(dt.files);
+        addFiles(files);
+    }
+    
+    function addFiles(newFiles) {
+        // 过滤允许的文件类型
+        const validFiles = newFiles.filter(file => {
+            const extension = file.name.split('.').pop().toLowerCase();
+            return allowedTypes.includes(extension);
+        });
+        
+        if (validFiles.length !== newFiles.length) {
+            const invalidCount = newFiles.length - validFiles.length;
+            alert(`有 ${invalidCount} 个文件格式不支持，已忽略。\\n支持的格式: ${allowedTypes.join(', ')}`);
+        }
+        
+        // 添加有效文件到列表（避免重复）
+        validFiles.forEach(file => {
+            const exists = currentFiles.some(f => f.name === file.name && f.size === file.size);
+            if (!exists) {
+                currentFiles.push(file);
+            }
+        });
+        
+        updateFileList();
+        updateFileInput();
+    }
+    
+    function removeFile(index) {
+        currentFiles.splice(index, 1);
+        updateFileList();
+        updateFileInput();
+    }
+    
+    function updateFileList() {
+        if (currentFiles.length === 0) {
+            fileList.style.display = 'none';
+            return;
+        }
+        
+        fileList.style.display = 'block';
+        selectedFiles.innerHTML = '';
+        
+        currentFiles.forEach((file, index) => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.innerHTML = `
+                <span class="file-name">${file.name}</span>
+                <span class="file-size">${formatFileSize(file.size)}</span>
+                <button type="button" class="remove-btn" onclick="removeFileFromList(${index})" title="移除文件">×</button>
+            `;
+            selectedFiles.appendChild(fileItem);
+        });
+    }
+    
+    function updateFileInput() {
+        // 创建新的文件列表
+        const dt = new DataTransfer();
+        currentFiles.forEach(file => {
+            dt.items.add(file);
+        });
+        fileInput.files = dt.files;
+    }
+    
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    
+    // 全局函数，供HTML调用
+    window.removeFileFromList = function(index) {
+        currentFiles.splice(index, 1);
+        updateFileList();
+        updateFileInput();
+    };
+}
 </script>
 </body>
 </html>
@@ -1809,6 +2085,30 @@ def upload_file():
     ip_config = get_current_ip_config()
     suggested_ip = suggest_static_ip()
     
+    # 检查环境状态
+    env_status = None
+    try:
+        missing_modules, missing_components = check_system_requirements()
+        if missing_components:
+            env_status = {
+                'type': 'warning',
+                'icon': 'exclamation-triangle',
+                'title': '系统组件提醒',
+                'message': f"""检测到可能缺少以下组件：{', '.join(missing_components)}<br>
+如果遇到问题，建议安装：<br>
+• <a href="https://aka.ms/vs/17/release/vc_redist.x64.exe" target="_blank">Microsoft Visual C++ Redistributable x64</a><br>
+• <a href="https://dotnet.microsoft.com/download/dotnet-framework/net48" target="_blank">.NET Framework 4.8</a>"""
+            }
+        elif hasattr(sys, '_MEIPASS'):
+            env_status = {
+                'type': 'info',
+                'icon': 'info-circle',
+                'title': 'exe版本运行中',
+                'message': '当前使用的是打包版本，如遇问题请确保以管理员权限运行，并检查杀毒软件设置。'
+            }
+    except Exception:
+        pass
+    
     # 获取第一个打印机的功能信息（用于前端显示）
     printer_caps = {}
     if PRINTERS:
@@ -1946,7 +2246,8 @@ def upload_file():
     
     return render_template_string(HTML, printers=PRINTERS, files=files, logs=logs, 
                                 ip_config=ip_config, suggested_ip=suggested_ip, 
-                                printer_caps=printer_caps, default_printer=default_printer)
+                                printer_caps=printer_caps, default_printer=default_printer,
+                                env_status=env_status)
  
 @app.route('/preview/<filename>')
 def preview_file(filename):
@@ -1967,16 +2268,19 @@ def preview_file(filename):
  
 def run_flask():
     # 开发环境使用 Flask 内置服务器
-    app.run(host='0.0.0.0', port=5000)
+    port = getattr(app, 'current_port', 5000)
+    app.run(host='0.0.0.0', port=port)
 
 def run_wsgi():
     # 生产环境推荐使用 waitress
     try:
         from waitress import serve
-        serve(app, host='0.0.0.0', port=5000)
+        port = getattr(app, 'current_port', 5000)
+        serve(app, host='0.0.0.0', port=port)
     except ImportError:
         print("Waitress未安装，使用Flask内置服务器")
-        app.run(host='0.0.0.0', port=5000)
+        port = getattr(app, 'current_port', 5000)
+        app.run(host='0.0.0.0', port=port)
  
  
 def on_quit(icon, item):
@@ -2001,7 +2305,7 @@ def on_show_ip_config(icon, item):
     """在浏览器中打开网络配置页面"""
     import webbrowser
     ip = get_local_ip()
-    port = 5000
+    port = getattr(app, 'current_port', 5000)
     url = f"http://{ip}:{port}/"
     webbrowser.open(url)
 
@@ -2057,10 +2361,84 @@ def on_enable_dhcp(icon, item):
         messagebox.showerror("错误", f"启用DHCP时发生错误: {str(e)}")
         root.destroy()
 
+def on_open_github(icon, item):
+    """打开GitHub仓库页面"""
+    import webbrowser
+    webbrowser.open("https://github.com/a937750307/lan-printing")
+
+def on_change_port(icon, item):
+    """更改服务端口"""
+    import tkinter as tk
+    from tkinter import messagebox, simpledialog
+    
+    try:
+        root = tk.Tk()
+        root.withdraw()  # 隐藏主窗口
+        
+        # 获取当前端口
+        current_port = getattr(app, 'current_port', 5000)
+        
+        # 弹出输入对话框
+        new_port = simpledialog.askinteger(
+            "更改端口",
+            f"当前端口: {current_port}\n请输入新的端口号 (1024-65535):",
+            minvalue=1024,
+            maxvalue=65535,
+            initialvalue=current_port
+        )
+        
+        if new_port and new_port != current_port:
+            # 验证端口是否被占用
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                sock.bind(('localhost', new_port))
+                sock.close()
+                
+                # 端口可用，提示用户重启服务
+                result = messagebox.askyesno(
+                    "端口更改确认",
+                    f"将端口从 {current_port} 更改为 {new_port}\n"
+                    f"需要重启服务才能生效，是否继续？"
+                )
+                
+                if result:
+                    # 保存新端口到全局变量
+                    app.current_port = new_port
+                    messagebox.showinfo(
+                        "端口更改成功", 
+                        f"端口已更改为: {new_port}\n"
+                        f"新的访问地址: http://{get_local_ip()}:{new_port}\n"
+                        f"程序将在3秒后重启..."
+                    )
+                    
+                    # 重启程序
+                    import subprocess
+                    import sys
+                    root.destroy()
+                    icon.stop()
+                    
+                    # 启动新的实例
+                    subprocess.Popen([sys.executable] + sys.argv + [f'--port={new_port}'])
+                    sys.exit(0)
+                    
+            except socket.error:
+                messagebox.showerror("端口错误", f"端口 {new_port} 已被占用，请选择其他端口")
+                sock.close()
+        
+        root.destroy()
+        
+    except Exception as e:
+        try:
+            messagebox.showerror("错误", f"更改端口时发生错误: {str(e)}")
+            root.destroy()
+        except:
+            pass
+
 def build_menu(icon):
     autostart = get_autostart()
     ip = get_local_ip()
-    port = 5000
+    port = getattr(app, 'current_port', 5000)  # 获取当前端口
     ip_config = get_current_ip_config()
     
     # 构建IP状态显示文本
@@ -2080,8 +2458,13 @@ def build_menu(icon):
             pystray.MenuItem('设置建议静态IP', on_set_static_ip),
             pystray.MenuItem('启用DHCP', on_enable_dhcp),
         )),
+        pystray.MenuItem('服务设置', pystray.Menu(
+            pystray.MenuItem(f'当前端口: {port}', None, enabled=False),
+            pystray.MenuItem('更改端口', on_change_port),
+        )),
         pystray.MenuItem('开机自启：' + ('已开启' if autostart else '未开启'), on_toggle_autostart),
         pystray.Menu.SEPARATOR,
+        pystray.MenuItem('GitHub仓库', on_open_github),
         pystray.MenuItem('退出', on_quit)
     )
  
@@ -2094,23 +2477,95 @@ def setup_tray():
         
         if not os.path.exists(logo_path):
             print(f"错误：logo.ico文件不存在于路径: {logo_path}")
-            return
+            # 尝试查找其他位置的图标文件
+            alternative_paths = [
+                os.path.join(os.path.dirname(__file__), 'logo.ico'),
+                os.path.join(os.getcwd(), 'logo.ico'),
+                'logo.ico'
+            ]
             
-        image = Image.open(logo_path)
-        print(f"成功加载logo.ico文件，尺寸: {image.size}")
+            logo_path = None
+            for alt_path in alternative_paths:
+                if os.path.exists(alt_path):
+                    logo_path = alt_path
+                    print(f"找到备用图标路径: {logo_path}")
+                    break
+            
+            if not logo_path:
+                print("未找到logo.ico文件，使用默认系统图标")
+                # 创建一个简单的默认图标
+                image = Image.new('RGB', (32, 32), color='blue')
+                draw = ImageDraw.Draw(image)
+                draw.text((8, 8), "P", fill='white')
+        else:
+            print(f"图标文件存在: {logo_path}")
+        
+        if logo_path:
+            try:
+                image = Image.open(logo_path)
+                print(f"成功加载图标文件，尺寸: {image.size}")
+            except Exception as e:
+                print(f"加载图标失败: {e}，使用默认图标")
+                # 创建默认图标
+                image = Image.new('RGB', (32, 32), color='blue')
+                draw = ImageDraw.Draw(image)
+                draw.text((8, 8), "P", fill='white')
+        else:
+            # 创建默认图标
+            image = Image.new('RGB', (32, 32), color='blue')
+            draw = ImageDraw.Draw(image)
+            draw.text((8, 8), "P", fill='white')
         
         # 创建系统托盘图标
-        icon = pystray.Icon('print_server', image, '内网打印服务')
+        icon = pystray.Icon('print_server', image, '内网打印服务 - by 忆痕')
         icon.menu = build_menu(icon)
         print("系统托盘启动成功")
-        icon.run()
+        
+        try:
+            icon.run()
+        except Exception as e:
+            print(f"系统托盘运行时出错: {e}")
+            # 如果托盘运行失败，显示友好提示
+            show_error_dialog(
+                "系统托盘启动失败",
+                f"系统托盘功能启动失败，但程序核心功能正常。\n\n"
+                f"错误信息: {str(e)}\n\n"
+                f"您仍可以通过以下方式使用程序：\n"
+                f"• 直接访问: http://{get_local_ip()}:{getattr(app, 'current_port', 5000)}\n"
+                f"• 程序会继续在后台运行\n"
+                f"• 使用 Ctrl+C 可以停止程序",
+                is_critical=False
+            )
+            
+            # 保持程序运行
+            try:
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                print("程序被用户中断")
+                sys.exit(0)
         
     except Exception as e:
-        print(f"系统托盘启动失败: {e}")
+        print(f"系统托盘初始化失败: {e}")
+        
+        # 显示详细错误信息
+        show_error_dialog(
+            "系统托盘初始化失败",
+            f"无法初始化系统托盘，可能的原因：\n\n"
+            f"1. 缺少图标文件 logo.ico\n"
+            f"2. 系统不支持托盘功能\n"
+            f"3. 相关库文件缺失\n\n"
+            f"程序核心功能正常，您可以直接访问：\n"
+            f"http://{get_local_ip()}:{getattr(app, 'current_port', 5000)}\n\n"
+            f"错误详情: {str(e)}",
+            is_critical=False
+        )
+        
         # 如果系统托盘失败，至少保持程序运行
         print("程序将继续运行，但没有系统托盘图标")
+        print(f"您可以通过浏览器访问: http://{get_local_ip()}:{getattr(app, 'current_port', 5000)}")
+        
         # 保持主线程不退出
-        import time
         try:
             while True:
                 time.sleep(1)
@@ -2118,47 +2573,464 @@ def setup_tray():
             print("程序被用户中断")
             sys.exit(0)
 
+def check_system_requirements():
+    """检查系统要求和环境"""
+    missing_modules = []
+    missing_system_components = []
+    
+    # 检查Python模块
+    try:
+        import win32print
+        import win32api
+        import win32gui
+        import win32con
+    except ImportError:
+        missing_modules.append("pywin32")
+    
+    try:
+        import pystray
+        from PIL import Image
+    except ImportError:
+        missing_modules.append("pystray 和 Pillow")
+    
+    try:
+        from flask import Flask
+    except ImportError:
+        missing_modules.append("flask")
+    
+    # 检查Microsoft Visual C++ Redistributable
+    try:
+        import ctypes
+        import ctypes.util
+        
+        # 尝试加载常见的VC++运行库
+        vc_libs = [
+            'msvcr120.dll',  # Visual C++ 2013
+            'vcruntime140.dll',  # Visual C++ 2015-2022
+            'msvcp140.dll',  # Visual C++ 2015-2022
+            'api-ms-win-crt-runtime-l1-1-0.dll'  # Universal CRT
+        ]
+        
+        missing_vc = []
+        for lib in vc_libs:
+            if not ctypes.util.find_library(lib.replace('.dll', '')):
+                try:
+                    ctypes.windll.LoadLibrary(lib)
+                except:
+                    if lib not in missing_vc:
+                        missing_vc.append(lib)
+        
+        if missing_vc:
+            missing_system_components.append("Microsoft Visual C++ Redistributable")
+    
+    except Exception:
+        # 如果检测失败，建议用户检查
+        missing_system_components.append("Microsoft Visual C++ Redistributable (检测失败，建议检查)")
+    
+    # 检查.NET Framework (某些功能可能需要)
+    try:
+        import winreg
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 
+                              r"SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full") as key:
+                version, _ = winreg.QueryValueEx(key, "Version")
+                if not version or version < "4.6":
+                    missing_system_components.append(".NET Framework 4.6 或更高版本")
+        except FileNotFoundError:
+            missing_system_components.append(".NET Framework 4.6 或更高版本")
+    except Exception:
+        pass
+    
+    # 检查Windows版本
+    try:
+        import platform
+        windows_version = platform.version()
+        major_version = int(windows_version.split('.')[0])
+        if major_version < 10:  # Windows 10 = version 10.0
+            missing_system_components.append("Windows 10 或更高版本 (当前版本可能不完全兼容)")
+    except Exception:
+        pass
+    
+    return missing_modules, missing_system_components
+
+def show_error_dialog(title, message, is_critical=True):
+    """显示友好的错误对话框"""
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+        
+        root = tk.Tk()
+        root.withdraw()  # 隐藏主窗口
+        
+        if is_critical:
+            messagebox.showerror(title, message)
+        else:
+            messagebox.showwarning(title, message)
+        
+        root.destroy()
+        return True
+    except Exception:
+        # 如果tkinter不可用，回退到控制台输出
+        print(f"\n{'='*50}")
+        print(f"错误: {title}")
+        print(f"{'='*50}")
+        print(message)
+        print(f"{'='*50}\n")
+        return False
+
+def check_windows_features():
+    """检查Windows特性和服务"""
+    issues = []
+    suggestions = []
+    
+    try:
+        # 检查打印服务是否运行
+        result = subprocess.run(['sc', 'query', 'Spooler'], 
+                              capture_output=True, text=True, timeout=5)
+        if 'RUNNING' not in result.stdout:
+            issues.append("Windows打印服务未运行")
+            suggestions.append("启动打印服务：sc start Spooler")
+    except Exception:
+        pass
+    
+    try:
+        # 检查Windows防火墙状态
+        result = subprocess.run(['netsh', 'advfirewall', 'show', 'allprofiles', 'state'], 
+                              capture_output=True, text=True, timeout=5)
+        if 'ON' in result.stdout:
+            suggestions.append("如果无法访问服务，可能需要在防火墙中允许Python或此程序")
+    except Exception:
+        pass
+    
+    return issues, suggestions
+
+def show_startup_tips():
+    """显示启动提示和常见问题解决方案"""
+    tips_msg = """🚀 内网打印服务启动成功！
+
+� 开发者：忆痕
+🔗 项目地址：https://github.com/a937750307/lan-printing
+
+�📝 使用提示：
+• 在浏览器中访问服务地址进行打印
+• 右键托盘图标可进行更多设置
+• 支持拖拽文件到网页进行打印
+
+❗ 如果遇到问题：
+
+1. 无法访问网页？
+   • 检查防火墙设置
+   • 确认IP地址和端口正确
+   • 尝试使用 http://127.0.0.1:端口号
+
+2. 找不到打印机？
+   • 确保打印机已连接并开机
+   • 检查打印机驱动是否安装
+   • 点击网页中的"刷新"按钮
+
+3. 打印失败？
+   • 确认打印机状态正常
+   • 检查是否选择了虚拟打印机
+   • 尝试重启打印机和程序
+
+4. 程序无法启动？
+   • 安装 Microsoft Visual C++ Redistributable
+   • 以管理员权限运行
+   • 检查杀毒软件是否误报
+
+💡 更多帮助：https://github.com/a937750307/lan-printing
+📧 问题反馈：请在GitHub Issues中提交"""
+    
+    show_error_dialog("启动成功 - 使用提示", tips_msg, is_critical=False)
+
+def check_exe_environment():
+    """检查exe运行环境，针对PyInstaller打包的程序"""
+    if not hasattr(sys, '_MEIPASS'):  # 不是PyInstaller打包的exe
+        return []
+    
+    issues = []
+    
+    try:
+        # 检查是否有写入权限
+        test_file = os.path.join(os.path.dirname(sys.executable), 'test_write.tmp')
+        try:
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+        except Exception:
+            issues.append("程序所在目录无写入权限，请以管理员身份运行或移动到其他目录")
+    
+    except Exception:
+        pass
+    
+    try:
+        # 检查临时目录权限
+        temp_dir = os.environ.get('TEMP', 'C:\\temp')
+        test_temp = os.path.join(temp_dir, 'print_server_test.tmp')
+        try:
+            with open(test_temp, 'w') as f:
+                f.write('test')
+            os.remove(test_temp)
+        except Exception:
+            issues.append("临时目录访问受限，可能影响文件处理功能")
+    
+    except Exception:
+        pass
+    
+    return issues
+
 if __name__ == '__main__':
-    print("=" * 50)
-    print("内网打印服务启动中...")
-    print("=" * 50)
-    
-    # 检测网络状态
-    local_ip = get_local_ip()
-    if local_ip == '127.0.0.1':
-        print("⚠️  网络状态: 离线模式")
-        print("   - 程序仍可正常工作")
-        print("   - 使用默认打印机配置")
-        print("   - 界面样式可能简化")
-    else:
-        print(f"✅ 网络状态: 在线 (IP: {local_ip})")
-        print("   - 完整功能可用")
-        print("   - 可获取实时打印机参数")
-    
-    print(f"🖨️  检测到 {len(PRINTERS)} 台物理打印机")
-    if PRINTERS:
-        for i, printer in enumerate(PRINTERS[:3], 1):  # 只显示前3台
-            print(f"   {i}. {printer}")
-        if len(PRINTERS) > 3:
-            print(f"   ... 还有 {len(PRINTERS) - 3} 台打印机")
-    else:
-        print("   ⚠️  未检测到可用的物理打印机")
-        print("   ℹ️  程序仍可运行，但打印功能可能受限")
-        print("   💡 请检查:")
-        print("      - 打印机是否正确连接")
-        print("      - 打印机驱动是否已安装")
-        print("      - Windows打印机和扫描仪设置")
-    
-    print("🌐 服务器将启动在: http://{}:5000".format(local_ip))
-    print("=" * 50)
-    
-    # 启动定期清理线程
-    cleaner_thread = threading.Thread(target=clean_old_files, daemon=True)
-    cleaner_thread.start()
-    # 判断是否为生产环境
-    if os.environ.get('USE_WSGI', '').lower() == 'true':
-        flask_thread = threading.Thread(target=run_wsgi, daemon=True)
-    else:
-        flask_thread = threading.Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-    setup_tray()
+    try:
+        # 特殊检查：如果是exe文件运行
+        if hasattr(sys, '_MEIPASS'):
+            print("🔍 检测到exe文件运行模式")
+            print("📦 内网打印服务 by 忆痕")
+            exe_issues = check_exe_environment()
+            if exe_issues:
+                error_msg = """exe文件运行环境检查发现问题：
+
+问题：
+""" + '\n'.join(f"• {issue}" for issue in exe_issues) + """
+
+常见解决方案：
+1. 【推荐】右键程序图标 → "以管理员身份运行"
+2. 将程序移动到用户文档文件夹或桌面
+3. 检查杀毒软件是否阻止程序运行
+4. 确保已安装最新的 Microsoft Visual C++ Redistributable
+
+下载链接：
+• VC++ x64: https://aka.ms/vs/17/release/vc_redist.x64.exe
+• VC++ x86: https://aka.ms/vs/17/release/vc_redist.x86.exe
+
+如果是首次运行，建议安装上述运行库后重启计算机。
+
+开发者：忆痕 | GitHub: https://github.com/a937750307/lan-printing"""
+                
+                show_error_dialog("exe运行环境检查", error_msg, is_critical=False)
+        
+        # 检查命令行参数中的端口设置
+        import sys
+        port = 5000
+        for arg in sys.argv:
+            if arg.startswith('--port='):
+                try:
+                    port = int(arg.split('=')[1])
+                    app.current_port = port
+                except ValueError:
+                    print(f"警告: 无效的端口参数 {arg}，使用默认端口 5000")
+        
+        print("=" * 60)
+        print("              内网打印服务 v1.3.1")
+        print("              作者：忆痕")
+        print("    GitHub: https://github.com/a937750307/lan-printing")
+        print("=" * 60)
+        
+        # 检查系统要求
+        missing_modules, missing_components = check_system_requirements()
+        
+        if missing_modules or missing_components:
+            error_parts = []
+            
+            if missing_modules:
+                error_parts.append(f"""Python依赖包缺失：
+缺少的包: {', '.join(missing_modules)}
+
+安装方法：
+pip install pywin32 pystray pillow flask""")
+            
+            if missing_components:
+                error_parts.append(f"""系统组件缺失：
+缺少的组件: {', '.join(missing_components)}
+
+下载链接：
+• Microsoft Visual C++ Redistributable:
+  https://aka.ms/vs/17/release/vc_redist.x64.exe
+  
+• .NET Framework 4.8:
+  https://dotnet.microsoft.com/download/dotnet-framework/net48""")
+            
+            error_msg = f"""运行此程序需要以下组件：
+
+{chr(10).join(error_parts)}
+
+完整解决方案：
+1. 【推荐】下载完整的exe版本（已包含所有依赖）
+   下载地址：https://github.com/a937750307/lan-printing/releases
+
+2. 【手动修复】按上述链接安装缺失组件
+   - 以管理员权限运行安装程序
+   - 重启计算机后重新运行本程序
+
+3. 【开发环境】如果使用Python源码：
+   pip install -r requirements.txt
+
+常见问题：
+• 如果是exe文件报错，通常是缺少VC++运行库
+• Windows 7用户需要额外安装更新补丁
+• 杀毒软件可能误报，请添加信任
+
+技术支持：https://github.com/a937750307/lan-printing"""
+            
+            show_error_dialog("系统环境检查", error_msg)
+            
+            # 即使有缺失组件，也尝试继续运行（可能部分功能可用）
+            if missing_modules:  # 如果缺少Python模块，则必须退出
+                sys.exit(1)
+            else:
+                print("⚠️ 检测到系统组件缺失，但将尝试继续运行...")
+                print("   如果遇到问题，请按提示安装缺失组件")
+        else:
+            print("✅ 系统环境检查通过")
+        
+        # 检测网络状态
+        local_ip = get_local_ip()
+        if local_ip == '127.0.0.1':
+            print("⚠️  网络状态: 离线模式")
+            print("   - 程序仍可正常工作")
+            print("   - 使用默认打印机配置")
+            print("   - 界面样式可能简化")
+            
+            # 显示友好提示
+            show_error_dialog(
+                "网络连接提示",
+                "检测到网络连接异常，程序将在离线模式下运行。\n\n"
+                "离线模式功能：\n"
+                "• 本地打印功能正常\n"
+                "• 使用 http://127.0.0.1:5000 访问\n"
+                "• 部分网络功能可能受限\n\n"
+                "如需完整功能，请检查网络连接。",
+                is_critical=False
+            )
+        else:
+            print(f"✅ 网络状态: 在线 (IP: {local_ip})")
+            print("   - 完整功能可用")
+            print("   - 可获取实时打印机参数")
+        
+        print(f"🖨️  检测到 {len(PRINTERS)} 台物理打印机")
+        if PRINTERS:
+            for i, printer in enumerate(PRINTERS[:3], 1):  # 只显示前3台
+                print(f"   {i}. {printer}")
+            if len(PRINTERS) > 3:
+                print(f"   ... 还有 {len(PRINTERS) - 3} 台打印机")
+        else:
+            print("   ⚠️  未检测到可用的物理打印机")
+            print("   ℹ️  程序仍可运行，但打印功能可能受限")
+            print("   💡 请检查:")
+            print("      - 打印机是否正确连接")
+            print("      - 打印机驱动是否已安装")
+            print("      - Windows打印机和扫描仪设置")
+            
+            # 显示打印机检测提示
+            show_error_dialog(
+                "打印机检测提示",
+                "未检测到可用的物理打印机。\n\n"
+                "请检查：\n"
+                "• 打印机是否正确连接并开机\n"
+                "• 打印机驱动程序是否已安装\n"
+                "• Windows 设置 > 打印机和扫描仪中是否显示\n"
+                "• 尝试重启程序或点击界面中的'刷新'按钮\n\n"
+                "程序仍可正常运行，检测到打印机后即可使用。",
+                is_critical=False
+            )
+        
+        print("🌐 服务器将启动在: http://{}:{}".format(local_ip, port))
+        print("=" * 60)
+        
+        # 检查Windows功能和服务
+        issues, suggestions = check_windows_features()
+        if issues:
+            print("⚠️ 检测到以下问题：")
+            for issue in issues:
+                print(f"   - {issue}")
+            print("💡 建议解决方案：")
+            for suggestion in suggestions:
+                print(f"   - {suggestion}")
+        
+        # 检查端口是否被占用
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.bind(('localhost', port))
+            sock.close()
+        except socket.error:
+            error_msg = f"""端口 {port} 已被占用！
+
+可能的原因：
+• 该端口被其他程序占用
+• 之前的程序实例未完全关闭
+• 系统服务占用了该端口
+
+解决方案：
+1. 更换端口：
+   python print_server.py --port=5001
+   
+2. 查找占用进程：
+   netstat -ano | findstr :{port}
+   
+3. 结束占用进程：
+   taskkill /PID [进程ID] /F
+   
+4. 重启计算机后再试
+
+如果问题持续，建议使用其他端口号（如5001-5010）"""
+            
+            show_error_dialog("端口占用错误", error_msg)
+            sys.exit(1)
+        
+        # 启动定期清理线程
+        cleaner_thread = threading.Thread(target=clean_old_files, daemon=True)
+        cleaner_thread.start()
+        
+        # 判断是否为生产环境
+        if os.environ.get('USE_WSGI', '').lower() == 'true':
+            flask_thread = threading.Thread(target=run_wsgi, daemon=True)
+        else:
+            flask_thread = threading.Thread(target=run_flask, daemon=True)
+        flask_thread.start()
+        
+        # 等待Flask服务启动
+        print("⏳ 正在启动Web服务...")
+        time.sleep(2)
+        
+        # 显示启动成功提示
+        if local_ip != '127.0.0.1' and len(PRINTERS) > 0:
+            print("🎉 启动完成！可以开始使用打印服务了")
+            print(" 访问地址：http://{}:{}".format(local_ip, port))
+            print("💡 右键托盘图标查看更多功能")
+            
+            # 首次启动时显示详细提示
+            if not os.path.exists('.startup_tip_shown'):
+                show_startup_tips()
+                # 创建标记文件，避免每次启动都显示
+                try:
+                    with open('.startup_tip_shown', 'w') as f:
+                        f.write('shown')
+                except:
+                    pass
+        
+        setup_tray()
+        
+    except KeyboardInterrupt:
+        print("\n程序被用户中断")
+        sys.exit(0)
+    except Exception as e:
+        error_msg = f"""程序启动时发生未知错误：
+
+错误信息: {str(e)}
+
+可能的解决方案：
+1. 以管理员权限运行程序
+2. 检查防火墙设置
+3. 确保 Python 版本兼容（建议 3.8+）
+4. 重新安装程序依赖
+
+如果问题持续，请访问：
+https://github.com/a937750307/lan-printing
+
+或联系技术支持提供以上错误信息。"""
+        
+        show_error_dialog("程序启动失败", error_msg)
+        print(f"\n严重错误: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
