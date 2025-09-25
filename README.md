@@ -1,3 +1,4 @@
+# 未完善，文件不可用，请等待更新
 # 内网打印服务1.4（已实测Win7/Win10，可正常打印）
 
 > 作者：忆痕 | GitHub: https://github.com/a937750307/lan-printing
