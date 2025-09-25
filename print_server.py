@@ -1056,7 +1056,10 @@ function initFileDragDrop() {
     
     // 点击区域触发文件选择
     dropArea.addEventListener('click', function(e) {
-        e.preventDefault();
+        // 只阻止链接跳转，不阻止点击事件
+        if (e.target.tagName === 'A') {
+            e.preventDefault();
+        }
         fileInput.click();
     });
     
@@ -1069,7 +1072,16 @@ function initFileDragDrop() {
     // 阻止默认的拖拽行为
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         dropArea.addEventListener(eventName, preventDefaults, false);
-        document.body.addEventListener(eventName, preventDefaults, false);
+    });
+    
+    // 只在document上阻止拖拽，不影响点击
+    ['dragenter', 'dragover'].forEach(eventName => {
+        document.body.addEventListener(eventName, function(e) {
+            if (e.target !== dropArea && !dropArea.contains(e.target)) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, false);
     });
     
     // 高亮拖拽区域
@@ -2181,6 +2193,11 @@ def upload_file():
             quality = request.form.get('quality', '600x600')
             uploaded_files = request.files.getlist('file')
             
+            # 检查是否选择了文件
+            if not uploaded_files or all(not f.filename for f in uploaded_files):
+                flash("❌ 错误: 请选择要打印的文件！", "danger")
+                return redirect(url_for('upload_file'))
+            
             # 检查是否有可用的打印机
             if not printer or printer == "" or printer == "未检测到可用打印机":
                 flash("❌ 错误: 未选择有效的打印机，请检查打印机连接后重试！", "danger")
@@ -2820,7 +2837,7 @@ if __name__ == '__main__':
                     print(f"警告: 无效的端口参数 {arg}，使用默认端口 5000")
         
         print("=" * 60)
-        print("              内网打印服务 v1.3.1")
+        print("              内网打印服务")
         print("              作者：忆痕")
         print("    GitHub: https://github.com/a937750307/lan-printing")
         print("=" * 60)
