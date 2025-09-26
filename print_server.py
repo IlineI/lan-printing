@@ -20,6 +20,7 @@ from PIL import Image, ImageDraw
 import socket
 import winreg
 import time
+import json
 
 # Windows DeviceCapabilities 常量
 DC_DUPLEX = 7
@@ -31,6 +32,10 @@ DC_ORIENTATION = 17
 DC_COPIES = 18
 DC_TRUETYPE = 28
 DC_DRIVER = 11
+
+# 控制台窗口相关全局变量
+CONSOLE_WINDOW = None
+CONSOLE_VISIBLE = True
 
 # Windows纸张大小常量
 DMPAPER_LETTER = 1
@@ -71,6 +76,58 @@ def clean_old_files(folder=None, expire_seconds=3600):
                     pass
         time.sleep(60)  # 每1分钟检查一次
  
+# 配置文件路径 - 保存在程序同级目录下
+def get_config_file_path():
+    """获取配置文件路径，兼容源码和打包后的情况"""
+    if hasattr(sys, '_MEIPASS'):
+        # PyInstaller打包后，配置文件保存在exe文件同级目录
+        return os.path.join(os.path.dirname(sys.executable), 'config.json')
+    else:
+        # 源码运行时，配置文件保存在脚本同级目录
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+
+CONFIG_FILE = get_config_file_path()
+
+def load_config():
+    """加载配置文件"""
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                print(f"✅ 配置文件加载成功: {CONFIG_FILE}")
+                return config
+        else:
+            print("ℹ️ 配置文件不存在，使用默认配置")
+            return {}
+    except Exception as e:
+        print(f"⚠️ 配置文件加载失败: {e}，使用默认配置")
+        return {}
+
+def save_config(config):
+    """保存配置文件"""
+    try:
+        # 确保目录存在
+        os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+        
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+        print(f"✅ 配置已保存到: {CONFIG_FILE}")
+        return True
+    except Exception as e:
+        print(f"❌ 配置保存失败: {e}")
+        return False
+
+def get_config_port():
+    """从配置文件获取端口号"""
+    config = load_config()
+    return config.get('port', 5000)  # 默认端口5000
+
+def save_port_config(port):
+    """保存端口配置"""
+    config = load_config()
+    config['port'] = port
+    return save_config(config)
+
 # 兼容PyInstaller打包和源码运行的资源路径
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
@@ -308,8 +365,21 @@ def get_autostart():
  
 app = Flask(__name__)
 app.secret_key = 'print_server_secret_key'
-UPLOAD_FOLDER = os.path.join(os.path.expanduser('~'), 'Desktop', 'lan-printing-uploads')
-LOG_FILE = 'print_log.txt'
+
+# 兼容PyInstaller打包的路径处理
+def get_app_dir():
+    """获取程序运行目录，兼容源码和打包后的情况"""
+    if hasattr(sys, '_MEIPASS'):
+        # PyInstaller打包后，使用exe文件所在目录
+        return os.path.dirname(sys.executable)
+    else:
+        # 源码运行时，使用脚本所在目录
+        return os.path.dirname(os.path.abspath(__file__))
+
+# 文件夹和文件路径配置
+APP_DIR = get_app_dir()
+UPLOAD_FOLDER = os.path.join(APP_DIR, 'uploads')
+LOG_FILE = os.path.join(APP_DIR, 'print_log.txt')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # 虚拟打印机名称列表（这些不是真正的物理打印机）
@@ -524,6 +594,62 @@ HTML = '''
             background-color: #dc3545;
             color: white;
         }
+        
+        /* 队列表格样式 */
+        .queue-table {
+            background-color: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .queue-table .file-name {
+            font-weight: 500;
+            color: #495057;
+        }
+        
+        .queue-table .btn-group-sm .btn {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        /* 删除按钮样式 */
+        .btn-outline-danger:hover {
+            transform: scale(1.05);
+            transition: transform 0.2s ease-in-out;
+        }
+        
+        /* 空队列提示样式 */
+        .empty-queue {
+            padding: 2rem;
+            text-align: center;
+            color: #6c757d;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 2px dashed #dee2e6;
+        }
+        
+        /* 文件类型徽章样式 */
+        .file-type-badge {
+            display: inline-block;
+            padding: 0.25em 0.5em;
+            font-size: 0.75em;
+            font-weight: 500;
+            line-height: 1;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: baseline;
+            border-radius: 0.25rem;
+            text-transform: uppercase;
+        }
+        
+        .file-type-pdf { background-color: #dc3545; color: white; }
+        .file-type-doc, .file-type-docx { background-color: #2b579a; color: white; }
+        .file-type-xls, .file-type-xlsx { background-color: #217346; color: white; }
+        .file-type-ppt, .file-type-pptx { background-color: #d24726; color: white; }
+        .file-type-txt { background-color: #6f42c1; color: white; }
+        .file-type-jpg, .file-type-jpeg, .file-type-png { background-color: #fd7e14; color: white; }
+        .file-type-unknown { background-color: #6c757d; color: white; }
     </style>
 </head>
 <body>
@@ -537,6 +663,9 @@ HTML = '''
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="pills-network-tab" data-bs-toggle="pill" data-bs-target="#pills-network" type="button" role="tab">网络配置</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="pills-repair-tab" data-bs-toggle="pill" data-bs-target="#pills-repair" type="button" role="tab">系统修复</button>
         </li>
     </ul>
 
@@ -562,7 +691,8 @@ HTML = '''
                     </select>
                     <div class="form-text text-muted">
                         {% if printers %}
-                            已过滤虚拟打印机，自动选择默认打印机，可手动刷新列表
+                            <strong>⚠️ 重要提醒:</strong> 请仔细选择打印机！程序会严格按照您的选择发送到指定打印机，不会回退到默认打印机。
+                            <br>已过滤虚拟打印机，自动选择默认打印机，可手动刷新列表
                         {% else %}
                             <span class="text-warning">⚠️ 未检测到物理打印机，请检查打印机连接后点击刷新</span>
                         {% endif %}
@@ -670,6 +800,18 @@ HTML = '''
             </div>
             {% endif %}
             <div class="alert alert-info">
+                <h6><i class="bi bi-lightbulb"></i> 队列管理功能</h6>
+                <ul class="mb-0 small">
+                    <li><strong>🗑️ 删除文件:</strong> 点击删除按钮可以从队列中移除单个文件，避免误打印</li>
+                    <li><strong>📁 清空队列:</strong> 可以一键清空所有待打印文件，节省时间</li>
+                    <li><strong>👁️ 文件预览:</strong> 打印前可以预览文件内容，确保正确性</li>
+                    <li><strong>📊 文件信息:</strong> 显示文件大小、类型和上传时间，便于管理</li>
+                    <li><strong>⏰ 自动清理:</strong> 文件会在10分钟后自动清理，无需手动删除</li>
+                    <li><strong>💡 使用建议:</strong> 打印前检查队列，删除不需要的文件可以节省纸张</li>
+                </ul>
+            </div>
+            
+            <div class="alert alert-info">
                 <h6><i class="bi bi-lightbulb"></i> 新功能特性</h6>
                 <ul class="mb-0 small">
                     <li><strong>🖱️ 拖拽上传:</strong> 支持直接拖拽文件到上传区域，无需点击选择</li>
@@ -690,18 +832,77 @@ HTML = '''
                 </div>
             </div>
 
-            <h4 class="mt-4">打印队列</h4>
-            <table class="table table-sm table-hover align-middle">
-                <thead class="table-light"><tr><th>文件名</th><th>操作</th></tr></thead>
+            <div class="d-flex justify-content-between align-items-center mt-4">
+                <h4 class="mb-0">打印队列</h4>
+                {% if files %}
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteAllFiles()" title="清空所有待打印文件">
+                    🗑️ 清空队列
+                </button>
+                {% endif %}
+            </div>
+            <table class="table table-sm table-hover align-middle mt-2 queue-table">
+                <thead class="table-light"><tr><th>文件名</th><th>大小</th><th>上传时间</th><th>操作</th></tr></thead>
                 <tbody>
                 {% for f in files %}
                     <tr>
-                        <td>{{f}}</td>
-                        <td><a href="/preview/{{f}}" target="_blank" class="btn btn-outline-secondary btn-sm">预览</a></td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <span class="file-type-badge file-type-{{f.extension}} me-2">{{f.extension}}</span>
+                                <div>
+                                    <div class="file-name">{{f.name}}</div>
+                                    {% if f.extension in ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'] %}
+                                        <small class="text-muted">办公文档</small>
+                                    {% elif f.extension in ['jpg', 'jpeg', 'png', 'gif', 'bmp'] %}
+                                        <small class="text-muted">图片文件</small>
+                                    {% elif f.extension == 'txt' %}
+                                        <small class="text-muted">文本文件</small>
+                                    {% else %}
+                                        <small class="text-muted">其他文件</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-dark">{{f.size_str}}</span>
+                        </td>
+                        <td>
+                            <small class="text-muted">{{f.upload_time}}</small>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="/preview/{{f.name}}" target="_blank" class="btn btn-outline-primary btn-sm" title="预览文件">
+                                    👁️ 预览
+                                </a>
+                                <button type="button" class="btn btn-outline-danger btn-sm" 
+                                        onclick="deleteFile('{{f.name}}')" title="从队列中删除">
+                                    🗑️ 删除
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="4">
+                            <div class="empty-queue">
+                                <div class="mb-3">📁</div>
+                                <h6 class="mb-2">队列为空</h6>
+                                <p class="mb-0">还没有待打印的文件，请先上传文件</p>
+                            </div>
+                        </td>
                     </tr>
                 {% endfor %}
                 </tbody>
             </table>
+            
+            {% if files %}
+            <div class="alert alert-info">
+                <small>
+                    📋 当前队列中有 <strong>{{files|length}}</strong> 个文件 | 
+                    🗑️ 点击删除按钮可以从队列中移除文件 | 
+                    ⏰ 文件会在10分钟后自动清理
+                </small>
+            </div>
+            {% endif %}
 
             <h4 class="mt-4">打印日志</h4>
             <ul class="list-group log-list mb-0">
@@ -727,13 +928,21 @@ HTML = '''
                         {% endif %}
                     </div>
                     <div class="col-md-6">
+                        <strong>服务端口:</strong> {{current_port}}
+                        {% if port_from_config %}
+                            <span class="badge bg-success">已保存</span>
+                        {% else %}
+                            <span class="badge bg-warning">默认</span>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
                         <strong>子网掩码:</strong> {{ip_config.subnet}}
                     </div>
                     <div class="col-md-6">
                         <strong>默认网关:</strong> {{ip_config.gateway}}
                     </div>
-                    <div class="col-md-6">
-                        <strong>网络适配器:</strong> {{ip_config.description[:30]}}...
+                    <div class="col-12">
+                        <strong>网络适配器:</strong> {{ip_config.description[:50]}}...
                     </div>
                 </div>
                 {% else %}
@@ -754,18 +963,19 @@ HTML = '''
                                 <div class="mb-3">
                                     <label class="form-label">IP地址</label>
                                     <input type="text" name="ip_address" class="form-control" 
-                                           value="{{suggested_ip}}" placeholder="192.168.1.100">
+                                           value="{{suggested_ip}}" placeholder="192.168.1.100" 
+                                           spellcheck="false" autocomplete="off" autocorrect="off">
                                     <div class="form-text">建议使用当前网段的固定IP</div>
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label">子网掩码</label>
                                     <input type="text" name="subnet_mask" class="form-control" 
-                                           value="255.255.255.0">
+                                           value="255.255.255.0" spellcheck="false" autocomplete="off" autocorrect="off">
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label">默认网关</label>
                                     <input type="text" name="gateway" class="form-control" 
-                                           placeholder="自动推导（可选）">
+                                           placeholder="自动推导（可选）" spellcheck="false" autocomplete="off" autocorrect="off">
                                     <div class="form-text">留空将自动推导网关地址</div>
                                 </div>
                                 <button type="submit" class="btn btn-primary">设置静态IP</button>
@@ -798,6 +1008,135 @@ HTML = '''
                     <li><strong>建议:</strong> 为打印服务器设置静态IP，方便其他设备记住访问地址</li>
                     <li><strong>注意:</strong> 修改网络配置需要管理员权限，可能会暂时中断网络连接</li>
                 </ul>
+            </div>
+        </div>
+
+        <!-- 系统修复标签页 -->
+        <div class="tab-pane fade" id="pills-repair" role="tabpanel">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="alert alert-primary">
+                            <h5><i class="bi bi-tools"></i> 系统修复工具</h5>
+                            <p class="mb-0">自动检测和修复常见的系统兼容性问题，支持 Windows 7/10/11</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 系统信息显示 -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6><i class="bi bi-info-circle"></i> 系统信息</h6>
+                            </div>
+                            <div class="card-body">
+                                <div id="system-info">
+                                    <div class="text-center">
+                                        <div class="spinner-border spinner-border-sm" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                        <span class="ms-2">正在获取系统信息...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6><i class="bi bi-shield-check"></i> 诊断状态</h6>
+                            </div>
+                            <div class="card-body">
+                                <div id="diagnosis-status">
+                                    <div class="text-center text-muted">
+                                        <i class="bi bi-clock"></i> 等待诊断
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 诊断和修复控制 -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6><i class="bi bi-gear"></i> 操作面板</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <button class="btn btn-primary w-100" id="start-diagnosis">
+                                            <i class="bi bi-search"></i> 开始诊断
+                                        </button>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <button class="btn btn-success w-100" id="apply-fixes" disabled>
+                                            <i class="bi bi-tools"></i> 应用修复
+                                        </button>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <button class="btn btn-warning w-100" id="run-repair-tool">
+                                            <i class="bi bi-terminal"></i> 运行修复工具
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 问题列表 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6><i class="bi bi-list-check"></i> 诊断结果</h6>
+                            </div>
+                            <div class="card-body">
+                                <div id="issues-list">
+                                    <div class="text-center text-muted">
+                                        <i class="bi bi-clipboard-data"></i>
+                                        <p class="mb-0">请先运行诊断以查看结果</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 版本特定说明 -->
+                <div class="alert alert-info mt-4">
+                    <h6><i class="bi bi-info-circle"></i> 系统兼容性说明</h6>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <h6 class="text-success">Windows 11</h6>
+                            <ul class="mb-0 small">
+                                <li>Windows Defender排除设置</li>
+                                <li>SmartScreen配置</li>
+                                <li>路径兼容性检查</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-4">
+                            <h6 class="text-primary">Windows 10</h6>
+                            <ul class="mb-0 small">
+                                <li>实时保护配置</li>
+                                <li>防火墙规则设置</li>
+                                <li>权限问题修复</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-4">
+                            <h6 class="text-warning">Windows 7</h6>
+                            <ul class="mb-0 small">
+                                <li>.NET Framework检查</li>
+                                <li>系统更新建议</li>
+                                <li>兼容性模式设置</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1192,6 +1531,433 @@ function initFileDragDrop() {
         updateFileInput();
     };
 }
+
+// 删除队列中的文件
+function deleteFile(filename) {
+    if (confirm(`确定要从队列中删除文件 "${filename}" 吗？\\n\\n删除后无法恢复，如果需要打印需要重新上传。`)) {
+        // 显示删除中状态
+        const deleteButtons = document.querySelectorAll(`button[onclick="deleteFile('${filename}')"]`);
+        deleteButtons.forEach(btn => {
+            btn.disabled = true;
+            btn.innerHTML = '🔄 删除中...';
+        });
+        
+        // 发送删除请求
+        fetch('/api/delete_file', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                filename: filename
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 删除成功，刷新页面或移除表格行
+                const row = document.querySelector(`button[onclick="deleteFile('${filename}')"]`).closest('tr');
+                if (row) {
+                    row.style.backgroundColor = '#f8f9fa';
+                    row.style.opacity = '0.5';
+                    setTimeout(() => {
+                        location.reload(); // 刷新页面以更新队列
+                    }, 500);
+                }
+                
+                // 显示成功消息
+                showAlert('success', `✅ 文件 "${filename}" 已从队列中删除`);
+            } else {
+                showAlert('danger', `❌ 删除失败: ${data.error}`);
+                // 恢复按钮状态
+                deleteButtons.forEach(btn => {
+                    btn.disabled = false;
+                    btn.innerHTML = '🗑️ 删除';
+                });
+            }
+        })
+        .catch(error => {
+            console.error('删除文件时发生错误:', error);
+            showAlert('danger', '❌ 删除文件时发生网络错误');
+            // 恢复按钮状态
+            deleteButtons.forEach(btn => {
+                btn.disabled = false;
+                btn.innerHTML = '🗑️ 删除';
+            });
+        });
+    }
+}
+
+// 显示提示消息
+function showAlert(type, message) {
+    // 创建提示框
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.style.position = 'fixed';
+    alertDiv.style.top = '20px';
+    alertDiv.style.right = '20px';
+    alertDiv.style.zIndex = '9999';
+    alertDiv.style.minWidth = '300px';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" onclick="this.parentElement.remove()" aria-label="Close"></button>
+    `;
+    
+    document.body.appendChild(alertDiv);
+    
+    // 3秒后自动消失
+    setTimeout(() => {
+        if (alertDiv.parentElement) {
+            alertDiv.remove();
+        }
+    }, 3000);
+}
+
+// 批量删除功能
+function deleteAllFiles() {
+    const fileRows = document.querySelectorAll('table tbody tr');
+    const fileCount = fileRows.length;
+    
+    // 排除空队列的情况
+    const emptyRow = document.querySelector('table tbody tr td[colspan]');
+    if (emptyRow) {
+        showAlert('info', 'ℹ️ 队列为空，没有文件需要删除');
+        return;
+    }
+    
+    if (confirm(`确定要删除队列中的所有 ${fileCount} 个文件吗？\\n\\n删除后无法恢复！`)) {
+        fetch('/api/delete_all_files', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('success', `✅ 已删除 ${data.count} 个文件`);
+                setTimeout(() => {
+                    location.reload();
+                }, 1000);
+            } else {
+                showAlert('danger', `❌ 批量删除失败: ${data.error}`);
+            }
+        })
+        .catch(error => {
+            console.error('批量删除时发生错误:', error);
+            showAlert('danger', '❌ 批量删除时发生网络错误');
+        });
+    }
+}
+
+// ==================== 系统修复工具功能 ====================
+let currentDiagnosis = null;
+
+// 系统信息获取和显示
+function loadSystemInfo() {
+    const systemInfoDiv = document.getElementById('system-info');
+    
+    // 显示基本系统信息
+    const userAgent = navigator.userAgent;
+    const platform = navigator.platform;
+    const language = navigator.language;
+    
+    let systemInfo = `
+        <div class="small">
+            <div><strong>浏览器:</strong> ${getBrowserInfo()}</div>
+            <div><strong>平台:</strong> ${platform}</div>
+            <div><strong>语言:</strong> ${language}</div>
+            <div><strong>时间:</strong> ${new Date().toLocaleString()}</div>
+        </div>
+    `;
+    
+    systemInfoDiv.innerHTML = systemInfo;
+}
+
+function getBrowserInfo() {
+    const userAgent = navigator.userAgent;
+    if (userAgent.indexOf("Chrome") > -1) return "Chrome";
+    if (userAgent.indexOf("Firefox") > -1) return "Firefox";
+    if (userAgent.indexOf("Safari") > -1) return "Safari";
+    if (userAgent.indexOf("Edge") > -1) return "Edge";
+    return "Unknown";
+}
+
+// 开始系统诊断
+function startDiagnosis() {
+    const diagnosisBtn = document.getElementById('start-diagnosis');
+    const diagnosisStatus = document.getElementById('diagnosis-status');
+    const issuesList = document.getElementById('issues-list');
+    const applyFixesBtn = document.getElementById('apply-fixes');
+    
+    // 禁用按钮，显示加载状态
+    diagnosisBtn.disabled = true;
+    diagnosisBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 诊断中...';
+    
+    diagnosisStatus.innerHTML = `
+        <div class="text-primary">
+            <div class="spinner-border spinner-border-sm"></div>
+            <span class="ms-2">正在进行系统诊断...</span>
+        </div>
+    `;
+    
+    // 调用系统诊断API
+    fetch('/api/system_diagnosis')
+        .then(response => response.json())
+        .then(data => {
+            diagnosisBtn.disabled = false;
+            diagnosisBtn.innerHTML = '<i class="bi bi-search"></i> 重新诊断';
+            
+            if (data.success) {
+                currentDiagnosis = data;
+                displayDiagnosisResults(data);
+                
+                if (data.fixes_available) {
+                    applyFixesBtn.disabled = false;
+                    diagnosisStatus.innerHTML = `
+                        <div class="text-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <span class="ms-2">发现 ${data.issues.length} 个问题</span>
+                        </div>
+                    `;
+                } else {
+                    diagnosisStatus.innerHTML = `
+                        <div class="text-success">
+                            <i class="bi bi-check-circle"></i>
+                            <span class="ms-2">系统状态良好</span>
+                        </div>
+                    `;
+                }
+            } else {
+                diagnosisStatus.innerHTML = `
+                    <div class="text-danger">
+                        <i class="bi bi-x-circle"></i>
+                        <span class="ms-2">诊断失败</span>
+                    </div>
+                `;
+                showAlert('danger', `诊断失败: ${data.error}`);
+            }
+        })
+        .catch(error => {
+            diagnosisBtn.disabled = false;
+            diagnosisBtn.innerHTML = '<i class="bi bi-search"></i> 开始诊断';
+            diagnosisStatus.innerHTML = `
+                <div class="text-danger">
+                    <i class="bi bi-x-circle"></i>
+                    <span class="ms-2">诊断出错</span>
+                </div>
+            `;
+            showAlert('danger', `诊断出错: ${error.message}`);
+            console.error('诊断错误:', error);
+        });
+}
+
+// 显示诊断结果
+function displayDiagnosisResults(data) {
+    const issuesList = document.getElementById('issues-list');
+    
+    if (!data.issues || data.issues.length === 0) {
+        issuesList.innerHTML = `
+            <div class="text-center text-success">
+                <i class="bi bi-check-circle display-6"></i>
+                <h5 class="mt-3">系统检查通过</h5>
+                <p class="text-muted">未发现兼容性问题</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let issuesHtml = '';
+    data.issues.forEach((issue, index) => {
+        const severityClass = {
+            'high': 'danger',
+            'medium': 'warning', 
+            'low': 'info'
+        };
+        
+        const severityIcon = {
+            'high': 'exclamation-triangle-fill',
+            'medium': 'exclamation-triangle',
+            'low': 'info-circle'
+        };
+        
+        issuesHtml += `
+            <div class="alert alert-${severityClass[issue.severity]} alert-dismissible" role="alert">
+                <h6 class="alert-heading">
+                    <i class="bi bi-${severityIcon[issue.severity]}"></i>
+                    ${issue.title}
+                </h6>
+                <p class="mb-2">${issue.description}</p>
+                ${issue.details ? `<small class="text-muted">详情: ${issue.details}</small>` : ''}
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" value="${issue.fix}" id="fix-${index}" checked>
+                    <label class="form-check-label" for="fix-${index}">
+                        应用此修复
+                    </label>
+                </div>
+            </div>
+        `;
+    });
+    
+    issuesList.innerHTML = issuesHtml;
+}
+
+// 应用修复
+function applyFixes() {
+    const applyFixesBtn = document.getElementById('apply-fixes');
+    
+    if (!currentDiagnosis || !currentDiagnosis.issues) {
+        showAlert('warning', '请先运行诊断');
+        return;
+    }
+    
+    // 获取选中的修复项目
+    const selectedFixes = [];
+    currentDiagnosis.issues.forEach((issue, index) => {
+        const checkbox = document.getElementById(`fix-${index}`);
+        if (checkbox && checkbox.checked) {
+            selectedFixes.push(issue.fix);
+        }
+    });
+    
+    if (selectedFixes.length === 0) {
+        showAlert('warning', '请选择要应用的修复项目');
+        return;
+    }
+    
+    // 禁用按钮，显示加载状态
+    applyFixesBtn.disabled = true;
+    applyFixesBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 修复中...';
+    
+    // 调用修复API
+    fetch('/api/apply_fixes', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            fixes: selectedFixes
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        applyFixesBtn.disabled = false;
+        applyFixesBtn.innerHTML = '<i class="bi bi-tools"></i> 重新修复';
+        
+        if (data.success) {
+            showAlert('success', data.message);
+            
+            // 显示修复结果详情
+            let resultDetails = '<br><strong>修复结果:</strong><br>';
+            Object.entries(data.results).forEach(([fixType, result]) => {
+                const status = result.success ? '✅' : '❌';
+                resultDetails += `${status} ${fixType}: ${result.message}<br>`;
+            });
+            
+            showAlert('info', `修复完成<br>${resultDetails}`);
+            
+            // 建议重新诊断
+            setTimeout(() => {
+                if (confirm('修复完成！是否重新运行诊断以查看结果？')) {
+                    startDiagnosis();
+                }
+            }, 2000);
+        } else {
+            showAlert('danger', `修复失败: ${data.error}`);
+        }
+    })
+    .catch(error => {
+        applyFixesBtn.disabled = false;
+        applyFixesBtn.innerHTML = '<i class="bi bi-tools"></i> 应用修复';
+        showAlert('danger', `修复出错: ${error.message}`);
+        console.error('修复错误:', error);
+    });
+}
+
+// 运行修复工具
+function runRepairTool() {
+    const runToolBtn = document.getElementById('run-repair-tool');
+    
+    runToolBtn.disabled = true;
+    runToolBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 启动中...';
+    
+    fetch('/api/run_repair_tool')
+        .then(response => response.json())
+        .then(data => {
+            runToolBtn.disabled = false;
+            runToolBtn.innerHTML = '<i class="bi bi-terminal"></i> 运行修复工具';
+            
+            if (data.success) {
+                showAlert('success', '修复工具已启动！请查看新打开的窗口。');
+            } else {
+                showAlert('danger', `启动失败: ${data.error}`);
+            }
+        })
+        .catch(error => {
+            runToolBtn.disabled = false;
+            runToolBtn.innerHTML = '<i class="bi bi-terminal"></i> 运行修复工具';
+            showAlert('danger', `启动出错: ${error.message}`);
+            console.error('启动错误:', error);
+        });
+}
+
+// 页面加载完成后绑定事件
+document.addEventListener('DOMContentLoaded', function() {
+    // 加载系统信息
+    loadSystemInfo();
+    
+    // 绑定按钮事件
+    const startDiagnosisBtn = document.getElementById('start-diagnosis');
+    const applyFixesBtn = document.getElementById('apply-fixes');
+    const runRepairToolBtn = document.getElementById('run-repair-tool');
+    
+    if (startDiagnosisBtn) {
+        startDiagnosisBtn.addEventListener('click', startDiagnosis);
+    }
+    
+    if (applyFixesBtn) {
+        applyFixesBtn.addEventListener('click', applyFixes);
+    }
+    
+    if (runRepairToolBtn) {
+        runRepairToolBtn.addEventListener('click', runRepairTool);
+    }
+    
+    // 监听标签页切换，在系统修复标签激活时自动运行诊断
+    const repairTab = document.getElementById('pills-repair-tab');
+    if (repairTab) {
+        repairTab.addEventListener('shown.bs.tab', function() {
+            if (!currentDiagnosis) {
+                setTimeout(startDiagnosis, 500); // 延迟执行，确保页面渲染完成
+            }
+        });
+    }
+});
+
+// 错误处理 - 在出现错误时自动提示用户使用修复工具
+window.addEventListener('error', function(event) {
+    console.error('页面错误:', event.error);
+    
+    // 如果是网络相关错误或权限错误，提示用户使用修复工具
+    const errorMessage = event.error ? event.error.message : event.message;
+    if (errorMessage && (
+        errorMessage.includes('网络') || 
+        errorMessage.includes('权限') || 
+        errorMessage.includes('拒绝') ||
+        errorMessage.includes('failed') ||
+        errorMessage.includes('error')
+    )) {
+        setTimeout(() => {
+            if (confirm('检测到可能的系统兼容性问题。是否打开系统修复工具进行诊断？')) {
+                // 切换到修复标签页
+                const repairTab = document.getElementById('pills-repair-tab');
+                if (repairTab) {
+                    repairTab.click();
+                }
+            }
+        }, 1000);
+    }
+});
 </script>
 </body>
 </html>
@@ -1377,17 +2143,17 @@ def print_pdf_with_settings(filepath, printer_name, copies, duplex, papersize, q
         return False
 
 def print_with_shell_execute(filepath, printer_name, copies):
-    """使用ShellExecute进行应用程序调用打印"""
+    """使用ShellExecute进行应用程序调用打印，确保使用指定打印机"""
     try:
         success_count = 0
         for i in range(copies):
             try:
-                # 使用关联的应用程序打印
+                # 首先尝试使用printto指定打印机
                 result = win32api.ShellExecute(
                     0,  # hwnd
-                    'print',  # operation
+                    'printto',  # operation - 使用printto而不是print
                     filepath,  # file
-                    None,  # parameters
+                    f'"{printer_name}"',  # parameters - 指定打印机名称
                     None,  # directory
                     0  # show command (SW_HIDE)
                 )
@@ -1396,53 +2162,67 @@ def print_with_shell_execute(filepath, printer_name, copies):
                     success_count += 1
                     time.sleep(1)  # 给应用程序时间处理
                 else:
-                    print(f"ShellExecute失败，错误代码: {result}")
+                    print(f"printto到{printer_name}失败，错误代码: {result}")
+                    # 如果printto失败，不再回退到默认打印机
                     
             except Exception as e:
                 print(f"打印第{i+1}份时出错: {e}")
                 
         if success_count > 0:
-            return True, f"通过关联应用程序打印已发送 ({success_count}/{copies}份)"
+            return True, f"通过关联应用程序打印已发送到 {printer_name} ({success_count}/{copies}份)"
         else:
-            return False, "所有打印尝试都失败了"
+            return False, f"无法打印到指定打印机 {printer_name}，请检查打印机状态"
             
     except Exception as e:
-        return False, f"ShellExecute打印失败: {str(e)}"
+        return False, f"指定打印机打印失败: {str(e)}"
 
 def print_file_silent_fallback(filepath, printer_name, copies=1):
-    """备用的静默打印方案"""
+    """备用的静默打印方案，确保使用指定打印机"""
     try:
-        # 方案1: 使用ShellExecute的静默打印
+        # 方案1: 使用ShellExecute的printto静默打印
+        success_count = 0
         for i in range(copies):
-            win32api.ShellExecute(
+            result = win32api.ShellExecute(
                 0, 
-                'print', 
+                'printto', 
                 filepath, 
-                f'/d:"{printer_name}"', 
+                f'"{printer_name}"',  # 直接指定打印机名称
                 '.', 
                 win32con.SW_HIDE  # 隐藏窗口
             )
-        return True, f"静默打印任务已发送到 {printer_name} ({copies}份)"
+            if result > 32:
+                success_count += 1
+                time.sleep(1)
+            else:
+                print(f"printto失败，错误代码: {result}")
+        
+        if success_count > 0:
+            return True, f"静默打印任务已发送到 {printer_name} ({success_count}/{copies}份)"
+        else:
+            # 如果printto全部失败，尝试其他方法而不是回退到默认打印机
+            raise Exception("printto方法失败")
         
     except Exception as e1:
         try:
-            # 方案2: 使用命令行静默打印
+            # 方案2: 使用批处理文件指定打印机
             import tempfile
             
-            # 创建批处理文件进行静默打印
+            # 创建批处理文件进行打印机指定打印
             bat_content = f'''@echo off
 for /L %%i in (1,1,{copies}) do (
-    start /min "" "{filepath}"
+    rundll32.exe printui.dll,PrintUIEntry /o /n "{printer_name}" /f "{filepath}"
+    timeout /t 2 /nobreak >nul
 )
 '''
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.bat', delete=False) as bat_file:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.bat', delete=False, encoding='gbk') as bat_file:
                 bat_file.write(bat_content)
                 bat_file_path = bat_file.name
             
             # 静默执行批处理文件
-            subprocess.run([bat_file_path], 
+            result = subprocess.run([bat_file_path], 
+                         capture_output=True,
                          creationflags=subprocess.CREATE_NO_WINDOW,
-                         shell=True)
+                         shell=True, timeout=60)
             
             # 清理临时文件
             try:
@@ -1450,17 +2230,66 @@ for /L %%i in (1,1,{copies}) do (
             except:
                 pass
                 
-            return True, f"静默打印任务已发送 ({copies}份) - 备用方案"
+            if result.returncode == 0:
+                return True, f"批处理打印任务已发送到 {printer_name} ({copies}份)"
+            else:
+                print(f"批处理打印失败: {result.stderr}")
+                raise Exception("批处理方法失败")
             
         except Exception as e2:
             try:
-                # 方案3: 最基础的静默方式
-                for i in range(copies):
-                    subprocess.run(['rundll32.exe', 'mshtml.dll,PrintHTML', filepath],
-                                 creationflags=subprocess.CREATE_NO_WINDOW)
-                return True, f"基础静默打印已执行 ({copies}份)"
+                # 方案3: 使用WIN32 API直接打印（适用于文本文件）
+                file_ext = os.path.splitext(filepath)[1].lower()
+                if file_ext == '.txt':
+                    return print_text_direct_to_printer(filepath, printer_name, copies)
+                else:
+                    return False, f"所有打印方案都失败，无法打印到指定打印机 {printer_name}"
             except Exception as e3:
                 return False, f"所有静默打印方案都失败: {str(e3)}"
+
+def print_text_direct_to_printer(filepath, printer_name, copies=1):
+    """使用WIN32 API直接将文本文件发送到指定打印机"""
+    try:
+        import win32print
+        
+        # 读取文本文件内容
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except UnicodeDecodeError:
+            with open(filepath, 'r', encoding='gbk') as f:
+                content = f.read()
+        
+        # 打开指定的打印机
+        printer_handle = win32print.OpenPrinter(printer_name)
+        
+        try:
+            success_count = 0
+            for i in range(copies):
+                # 开始打印作业
+                job_id = win32print.StartDocPrinter(printer_handle, 1, ("Text Document", None, "RAW"))
+                
+                try:
+                    win32print.StartPagePrinter(printer_handle)
+                    
+                    # 发送文本内容到打印机
+                    win32print.WritePrinter(printer_handle, content.encode('utf-8'))
+                    
+                    win32print.EndPagePrinter(printer_handle)
+                    win32print.EndDocPrinter(printer_handle)
+                    success_count += 1
+                    
+                except Exception as e:
+                    print(f"打印作业 {i+1} 失败: {e}")
+                    win32print.AbortPrinter(printer_handle)
+                
+            return True, f"直接打印到 {printer_name} 成功 ({success_count}/{copies}份)"
+            
+        finally:
+            win32print.ClosePrinter(printer_handle)
+            
+    except Exception as e:
+        return False, f"直接打印失败: {str(e)}"
 
 def print_pdf_silent(filepath, printer_name, copies=1):
     """专门用于PDF文件的静默打印"""
@@ -1494,35 +2323,51 @@ def print_pdf_silent(filepath, printer_name, copies=1):
                     break
         
         if not adobe_found:
-            # 方案2: 使用默认PDF阅读器
+            # 方案2: 使用printto指定打印机，避免使用默认打印机
             try:
                 for i in range(copies):
-                    # 使用系统默认PDF阅读器打印
-                    result = win32api.ShellExecute(0, 'print', filepath, None, None, 0)
+                    # 首先尝试使用printto指定打印机
+                    result = win32api.ShellExecute(0, 'printto', filepath, f'"{printer_name}"', None, 0)
                     if result <= 32:
-                        raise Exception(f"ShellExecute失败，错误代码: {result}")
+                        # 如果printto失败，记录错误但不回退到默认打印机
+                        print(f"printto失败，错误代码: {result}")
+                        raise Exception(f"无法打印到指定打印机 {printer_name}")
                     time.sleep(3)  # 给应用程序更多时间
-                return True, f"默认PDF阅读器打印已发送到 {printer_name} ({copies}份)"
+                return True, f"PDF打印已发送到指定打印机 {printer_name} ({copies}份)"
             except Exception as e:
-                print(f"默认PDF阅读器打印失败: {e}")
+                print(f"指定打印机打印失败: {e}")
+                # 不再回退到默认打印机，而是继续尝试其他方案
         
-        # 方案3: 使用PowerShell和COM对象
+        # 方案3: 使用PowerShell和COM对象，设置正确的打印机
         try:
             ps_script = f'''
 try {{
     Add-Type -AssemblyName System.Drawing
     Add-Type -AssemblyName System.Windows.Forms
     
-    # 尝试使用Edge WebView2打印PDF
+    # 设置指定的打印机
     $filepath = "{filepath.replace(chr(92), chr(92)+chr(92))}"
     $printer = "{printer_name}"
     
-    for ($i = 1; $i -le {copies}; $i++) {{
-        Start-Process -FilePath $filepath -Verb Print -WindowStyle Hidden
-        Start-Sleep -Seconds 3
+    # 尝试使用.NET PrintDocument设置打印机
+    Add-Type -AssemblyName System.Drawing
+    $printDoc = New-Object System.Drawing.Printing.PrintDocument
+    $printDoc.PrinterSettings.PrinterName = $printer
+    
+    # 验证打印机是否可用
+    if (-not $printDoc.PrinterSettings.IsValid) {{
+        Write-Error "指定的打印机不可用: $printer"
+        exit 1
     }}
     
-    Write-Output "PDF PowerShell打印完成"
+    # 直接使用printto命令
+    for ($i = 1; $i -le {copies}; $i++) {{
+        $proc = Start-Process -FilePath "powershell" -ArgumentList "-Command", "Start-Process -FilePath '$filepath' -Verb PrintTo -ArgumentList '$printer'" -WindowStyle Hidden -PassThru
+        $proc.WaitForExit(30000)  # 等待30秒
+        Start-Sleep -Seconds 2
+    }}
+    
+    Write-Output "PDF PowerShell打印完成，发送到: $printer"
 }} catch {{
     Write-Error "PDF PowerShell打印失败: $_"
     exit 1
@@ -1534,7 +2379,7 @@ try {{
                                   timeout=60)
             
             if result.returncode == 0:
-                return True, f"PDF PowerShell打印已执行 ({copies}份)"
+                return True, f"PDF PowerShell打印已发送到 {printer_name} ({copies}份)"
             else:
                 print(f"PowerShell打印失败: {result.stderr}")
         
@@ -1549,7 +2394,7 @@ try {{
         return print_file_silent_fallback(filepath, printer_name, copies)
 
 def print_text_file_simple(filepath, printer_name, copies=1):
-    """简化TXT静默打印：调用ShellExecute进行打印"""
+    """简化TXT静默打印：调用ShellExecute进行打印到指定打印机"""
     try:
         sent = 0
         for i in range(copies):
@@ -1558,19 +2403,19 @@ def print_text_file_simple(filepath, printer_name, copies=1):
                 sent += 1
                 time.sleep(1)
             else:
-                # 回退到普通print
-                r2 = win32api.ShellExecute(0, 'print', filepath, None, None, 0)
-                if r2 > 32:
-                    sent += 1
-                    time.sleep(1)
+                # 如果printto失败，不再回退到默认打印机
+                print(f"printto到{printer_name}失败，错误代码: {r}")
+                
         if sent:
             return True, f"TXT静默打印已发送到 {printer_name} ({sent}/{copies}份)"
-        return False, "TXT静默打印失败"
+        else:
+            # 如果printto完全失败，尝试直接API打印
+            return print_text_direct_to_printer(filepath, printer_name, copies)
     except Exception as e:
         return False, f"TXT静默打印异常: {e}"
 
 def print_image_silent(filepath, printer_name, copies=1):
-    """专门用于图片文件的静默打印，尝试多种方式"""
+    """专门用于图片文件的静默打印，确保使用指定打印机"""
     try:
         success_total = 0
         # 方法1：使用系统画图(MSPaint)的 /pt 参数
@@ -1591,20 +2436,18 @@ def print_image_silent(filepath, printer_name, copies=1):
                     success_total += 1
                     time.sleep(2)
                     continue
-            except Exception:
-                pass
-            # 方法3：ShellExecute 'print'（默认打印机）
-            try:
-                r = win32api.ShellExecute(0, 'print', filepath, None, None, 0)
-                if r > 32:
-                    success_total += 1
-                    time.sleep(2)
-                    continue
-            except Exception:
-                pass
+                else:
+                    print(f"printto图片到{printer_name}失败，错误代码: {r}")
+            except Exception as e:
+                print(f"printto图片异常: {e}")
+            
+            # 方法3：不再回退到默认打印机，而是记录失败
+            print(f"第{i+1}份图片打印失败，无法发送到指定打印机 {printer_name}")
+                
         if success_total > 0:
             return True, f"图片静默打印已发送到 {printer_name} ({success_total}/{copies}份)"
-        return False, "图片静默打印失败"
+        else:
+            return False, f"图片打印失败，无法发送到指定打印机 {printer_name}"
     except Exception as e:
         return False, f"图片静默打印异常: {e}"
 def print_office_silent(filepath, printer_name, copies=1):
@@ -1778,6 +2621,14 @@ try {{
     $ppt = New-Object -ComObject PowerPoint.Application
     $ppt.Visible = $false
     $presentation = $ppt.Presentations.Open("{abs_filepath}")
+    
+    # 设置打印机（PowerPoint）
+    try {{
+        # PowerPoint使用ActivePrinter属性
+        $ppt.ActivePrinter = "{printer_name}"
+    }} catch {{
+        Write-Host "PowerPoint无法设置打印机，使用默认打印机"
+    }}
     
     # 循环打印指定份数
     for ($i = 1; $i -le {copies}; $i++) {{
@@ -2063,6 +2914,73 @@ def get_printer_info_api():
             'error': str(e)
         })
 
+@app.route('/api/delete_file', methods=['POST'])
+def delete_file_api():
+    """API端点：删除队列中的单个文件"""
+    try:
+        data = request.get_json()
+        if not data or 'filename' not in data:
+            return jsonify({'success': False, 'error': '未提供文件名'})
+        
+        filename = data['filename']
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        
+        # 检查文件是否存在
+        if not os.path.exists(filepath):
+            return jsonify({'success': False, 'error': '文件不存在或已被删除'})
+        
+        # 删除文件
+        os.remove(filepath)
+        
+        # 记录删除日志
+        log_message = f"{datetime.now()} 用户删除文件: {filename}"
+        with open(LOG_FILE, 'a', encoding='utf-8') as f:
+            f.write(log_message + "\n")
+        
+        return jsonify({
+            'success': True,
+            'message': f'文件 {filename} 已删除'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@app.route('/api/delete_all_files', methods=['POST'])
+def delete_all_files_api():
+    """API端点：清空队列中的所有文件"""
+    try:
+        files = os.listdir(UPLOAD_FOLDER)
+        deleted_count = 0
+        
+        for filename in files:
+            try:
+                filepath = os.path.join(UPLOAD_FOLDER, filename)
+                if os.path.isfile(filepath):
+                    os.remove(filepath)
+                    deleted_count += 1
+            except Exception as e:
+                print(f"删除文件 {filename} 时出错: {e}")
+        
+        # 记录删除日志
+        log_message = f"{datetime.now()} 用户清空队列: 删除了 {deleted_count} 个文件"
+        with open(LOG_FILE, 'a', encoding='utf-8') as f:
+            f.write(log_message + "\n")
+        
+        return jsonify({
+            'success': True,
+            'count': deleted_count,
+            'message': f'已删除 {deleted_count} 个文件'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
 @app.route('/api/refresh_printers')
 def refresh_printers_api():
     """API端点：刷新打印机列表"""
@@ -2087,10 +3005,143 @@ def refresh_printers_api():
             'success': False,
             'error': str(e)
         })
+
+@app.route('/api/system_diagnosis')
+def system_diagnosis():
+    """系统诊断API"""
+    try:
+        # 导入修复工具
+        from windows_repair_tool import WindowsFixTool
+        
+        tool = WindowsFixTool()
+        diagnosis = tool.diagnose()
+        
+        return jsonify({
+            'success': True,
+            'system_info': diagnosis['system_info'],
+            'issues': diagnosis['issues'],
+            'fixes_available': diagnosis['fixes_available']
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'系统诊断失败: {str(e)}'
+        })
+
+@app.route('/api/apply_fixes', methods=['POST'])
+def apply_fixes():
+    """应用修复API"""
+    try:
+        from windows_repair_tool import WindowsFixTool
+        
+        data = request.get_json() or {}
+        fix_types = data.get('fixes', [])
+        
+        tool = WindowsFixTool()
+        # 先诊断获取问题列表
+        tool.diagnose()
+        
+        # 应用修复
+        results = tool.apply_fixes(fix_types if fix_types else None)
+        
+        return jsonify({
+            'success': True,
+            'results': results,
+            'message': f'修复完成，成功应用 {sum(1 for r in results.values() if r.get("success"))} 项修复'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'应用修复失败: {str(e)}'
+        })
+
+@app.route('/api/run_repair_tool')
+def run_repair_tool():
+    """运行修复工具"""
+    try:
+        import subprocess
+        import sys
+        
+        repair_script = os.path.join(os.path.dirname(__file__), 'windows_repair_tool.py')
+        
+        if not os.path.exists(repair_script):
+            return jsonify({
+                'success': False,
+                'error': '修复工具脚本不存在'
+            })
+        
+        # 在新窗口中运行修复工具
+        if os.name == 'nt':  # Windows
+            subprocess.Popen([sys.executable, repair_script], 
+                           creationflags=subprocess.CREATE_NEW_CONSOLE)
+        else:
+            subprocess.Popen([sys.executable, repair_script])
+        
+        return jsonify({
+            'success': True,
+            'message': '修复工具已启动'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'启动修复工具失败: {str(e)}'
+        })
  
+def get_file_list():
+    """获取上传文件夹中的文件列表（包含详细信息）"""
+    file_list = []
+    try:
+        for filename in os.listdir(UPLOAD_FOLDER):
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            if os.path.isfile(filepath):
+                try:
+                    # 获取文件信息
+                    stat = os.stat(filepath)
+                    file_size = stat.st_size
+                    upload_time = datetime.fromtimestamp(stat.st_mtime)
+                    
+                    # 格式化文件大小
+                    if file_size < 1024:
+                        size_str = f"{file_size} B"
+                    elif file_size < 1024 * 1024:
+                        size_str = f"{file_size / 1024:.1f} KB"
+                    else:
+                        size_str = f"{file_size / (1024 * 1024):.1f} MB"
+                    
+                    # 获取文件扩展名
+                    extension = os.path.splitext(filename)[1].lower().lstrip('.')
+                    
+                    file_info = {
+                        'name': filename,
+                        'size': file_size,
+                        'size_str': size_str,
+                        'upload_time': upload_time.strftime('%m-%d %H:%M'),
+                        'extension': extension or 'unknown'
+                    }
+                    
+                    file_list.append(file_info)
+                except Exception as e:
+                    print(f"获取文件 {filename} 信息时出错: {e}")
+                    # 如果无法获取详细信息，至少保留文件名
+                    file_list.append({
+                        'name': filename,
+                        'size': 0,
+                        'size_str': 'Unknown',
+                        'upload_time': 'Unknown',
+                        'extension': 'unknown'
+                    })
+        
+        # 按上传时间排序（最新的在前）
+        file_list.sort(key=lambda x: x['upload_time'], reverse=True)
+    except Exception as e:
+        print(f"获取文件列表时出错: {e}")
+    
+    return file_list
+
 @app.route('/', methods=['GET', 'POST'])
 def upload_file():
-    files = os.listdir(UPLOAD_FOLDER)
+    files = get_file_list()  # 使用新的文件列表函数
     logs = get_logs()
     
     # 获取IP配置信息
@@ -2261,26 +3312,122 @@ def upload_file():
     # 获取默认打印机
     default_printer = get_default_printer()
     
+    # 获取端口配置信息
+    current_port = getattr(app, 'current_port', 5000)
+    config_port = get_config_port()
+    port_from_config = (current_port == config_port)
+    
     return render_template_string(HTML, printers=PRINTERS, files=files, logs=logs, 
                                 ip_config=ip_config, suggested_ip=suggested_ip, 
                                 printer_caps=printer_caps, default_printer=default_printer,
-                                env_status=env_status)
+                                env_status=env_status, current_port=current_port,
+                                port_from_config=port_from_config)
  
 @app.route('/preview/<filename>')
 def preview_file(filename):
     fpath = os.path.join(UPLOAD_FOLDER, filename)
     if not os.path.exists(fpath):
-        return f'<div class="alert alert-danger">文件未找到或已被自动清理！</div>', 404
-    ext = filename.rsplit('.', 1)[1].lower()
-    if ext in {'jpg', 'jpeg', 'png'}:
-        return send_from_directory(UPLOAD_FOLDER, filename, mimetype=f'image/{ext}')
-    elif ext == 'pdf':
-        return send_from_directory(UPLOAD_FOLDER, filename, mimetype='application/pdf')
-    elif ext == 'txt':
-        with open(fpath, 'r', encoding='utf-8') as f:
-            return f'<pre>{f.read()}</pre>'
-    else:
-        return '<div class="alert alert-warning">不支持预览该文件类型</div>'
+        return f'<div class="container mt-4"><div class="alert alert-danger"><h4>文件未找到</h4><p>文件 "{filename}" 不存在或已被删除！</p><p><a href="/" class="btn btn-primary">返回首页</a></p></div></div>', 404
+    
+    try:
+        ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+        
+        if ext in {'jpg', 'jpeg', 'png'}:
+            return send_from_directory(UPLOAD_FOLDER, filename, mimetype=f'image/{ext}')
+        elif ext == 'pdf':
+            return send_from_directory(UPLOAD_FOLDER, filename, mimetype='application/pdf')
+        elif ext == 'txt':
+            try:
+                with open(fpath, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                return f'''
+                <div class="container mt-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4>文件预览: {filename}</h4>
+                        <a href="/" class="btn btn-secondary">返回首页</a>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <pre style="white-space: pre-wrap; font-family: monospace;">{content}</pre>
+                        </div>
+                    </div>
+                </div>
+                '''
+            except UnicodeDecodeError:
+                try:
+                    with open(fpath, 'r', encoding='gbk') as f:
+                        content = f.read()
+                    return f'''
+                    <div class="container mt-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h4>文件预览: {filename}</h4>
+                            <a href="/" class="btn btn-secondary">返回首页</a>
+                        </div>
+                        <div class="card">
+                            <div class="card-body">
+                                <pre style="white-space: pre-wrap; font-family: monospace;">{content}</pre>
+                            </div>
+                        </div>
+                    </div>
+                    '''
+                except Exception as e:
+                    return f'''
+                    <div class="container mt-4">
+                        <div class="alert alert-warning">
+                            <h4>无法预览文件</h4>
+                            <p>文件 "{filename}" 无法以文本格式预览，编码错误: {str(e)}</p>
+                            <p><a href="/" class="btn btn-primary">返回首页</a></p>
+                        </div>
+                    </div>
+                    '''
+        else:
+            # 对于其他文件类型，提供下载链接和基本信息
+            file_size = os.path.getsize(fpath)
+            if file_size < 1024:
+                size_str = f"{file_size} B"
+            elif file_size < 1024 * 1024:
+                size_str = f"{file_size / 1024:.1f} KB"
+            else:
+                size_str = f"{file_size / (1024 * 1024):.1f} MB"
+            
+            return f'''
+            <div class="container mt-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h4>文件信息: {filename}</h4>
+                    <a href="/" class="btn btn-secondary">返回首页</a>
+                </div>
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">📄 {filename}</h5>
+                        <p class="card-text">
+                            <strong>文件类型:</strong> {ext.upper() if ext else 'Unknown'}<br>
+                            <strong>文件大小:</strong> {size_str}<br>
+                            <strong>说明:</strong> 此文件类型不支持在线预览
+                        </p>
+                        <div class="btn-group">
+                            <a href="/uploads/{filename}" class="btn btn-primary" download>下载文件</a>
+                            <button onclick="history.back()" class="btn btn-outline-secondary">返回</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            '''
+    except Exception as e:
+        return f'''
+        <div class="container mt-4">
+            <div class="alert alert-danger">
+                <h4>预览错误</h4>
+                <p>预览文件 "{filename}" 时发生错误: {str(e)}</p>
+                <p><a href="/" class="btn btn-primary">返回首页</a></p>
+            </div>
+        </div>
+        ''', 500
+
+# 添加直接下载路由
+@app.route('/uploads/<filename>')
+def download_file(filename):
+    """提供文件下载"""
+    return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=True)
  
  
 def run_flask():
@@ -2301,16 +3448,80 @@ def run_wsgi():
  
  
 def on_quit(icon, item):
+    print("🔄 正在退出程序...")
+    
+    # 停止托盘图标
     icon.stop()
-    # 优雅退出：尝试终止所有后台线程
+    
+    # 尝试优雅关闭Flask应用（如果有全局引用的话）
+    try:
+        if hasattr(app, 'shutdown'):
+            app.shutdown()
+    except:
+        pass
+    
+    # 强制终止所有线程
     import threading
-    for t in threading.enumerate():
+    import os
+    
+    # 获取所有活跃线程
+    active_threads = threading.enumerate()
+    print(f"发现 {len(active_threads)} 个活跃线程")
+    
+    for t in active_threads:
         if t is not threading.current_thread():
+            thread_name = getattr(t, 'name', 'Unknown')
+            print(f"正在等待线程: {thread_name}")
             try:
-                t.join(timeout=2)
-            except Exception:
-                pass
-    sys.exit(0)
+                # 给每个线程1秒时间完成
+                t.join(timeout=1)
+                if t.is_alive():
+                    print(f"线程 {thread_name} 未能在1秒内退出")
+            except Exception as e:
+                print(f"等待线程退出时出错: {e}")
+    
+    # 强制退出进程
+    print("✅ 强制退出程序")
+    try:
+        # 使用os._exit确保立即退出，不执行清理代码
+        os._exit(0)
+    except:
+        # 如果os._exit失败，使用sys.exit
+        sys.exit(0)
+
+def toggle_console_window(icon, item):
+    """切换控制台窗口显示/隐藏"""
+    global CONSOLE_WINDOW, CONSOLE_VISIBLE
+    
+    try:
+        import ctypes
+        
+        if not CONSOLE_WINDOW:
+            kernel32 = ctypes.windll.kernel32
+            CONSOLE_WINDOW = kernel32.GetConsoleWindow()
+        
+        if CONSOLE_WINDOW:
+            user32 = ctypes.windll.user32
+            
+            if CONSOLE_VISIBLE:
+                # 隐藏控制台
+                user32.ShowWindow(CONSOLE_WINDOW, 0)  # SW_HIDE
+                CONSOLE_VISIBLE = False
+                print("✅ 控制台窗口已隐藏")
+            else:
+                # 显示控制台
+                user32.ShowWindow(CONSOLE_WINDOW, 1)  # SW_SHOWNORMAL
+                user32.SetForegroundWindow(CONSOLE_WINDOW)  # 带到前台
+                CONSOLE_VISIBLE = True
+                print("✅ 控制台窗口已显示")
+            
+            # 刷新托盘菜单
+            icon.menu = build_menu(icon)
+        else:
+            print("⚠️ 未找到控制台窗口")
+            
+    except Exception as e:
+        print(f"❌ 控制台窗口操作失败: {e}")
  
 def on_toggle_autostart(icon, item):
     current = get_autostart()
@@ -2383,6 +3594,76 @@ def on_open_github(icon, item):
     import webbrowser
     webbrowser.open("https://github.com/a937750307/lan-printing")
 
+def on_view_config(icon, item):
+    """查看当前配置"""
+    try:
+        config = load_config()
+        config_info = f"""当前配置信息：
+
+端口设置: {config.get('port', 5000)} {'✅' if config.get('port') else '(默认)'}
+配置文件: {CONFIG_FILE}
+
+配置文件内容：
+{json.dumps(config, ensure_ascii=False, indent=2) if config else '{}'}
+
+说明：
+• 端口设置会在程序重启后自动应用
+• 配置文件保存在用户桌面目录
+• 可通过托盘菜单修改端口设置"""
+        
+        import tkinter as tk
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showinfo("配置信息", config_info)
+        root.destroy()
+    except Exception as e:
+        import tkinter as tk
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror("错误", f"查看配置时发生错误: {str(e)}")
+        root.destroy()
+
+def on_reset_config(icon, item):
+    """重置配置到默认值"""
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.withdraw()
+        
+        result = messagebox.askyesno(
+            "重置配置确认",
+            "确定要重置所有配置到默认值吗？\n\n"
+            "这将：\n"
+            "• 将端口重置为 5000\n"
+            "• 删除当前配置文件\n"
+            "• 需要重启程序生效"
+        )
+        
+        if result:
+            try:
+                if os.path.exists(CONFIG_FILE):
+                    os.remove(CONFIG_FILE)
+                    messagebox.showinfo("重置成功", "配置已重置，程序将重启以应用默认设置")
+                    
+                    # 重启程序
+                    import subprocess
+                    import sys
+                    root.destroy()
+                    icon.stop()
+                    subprocess.Popen([sys.executable] + sys.argv)
+                    sys.exit(0)
+                else:
+                    messagebox.showinfo("提示", "配置文件不存在，当前已是默认配置")
+            except Exception as e:
+                messagebox.showerror("错误", f"重置配置失败: {str(e)}")
+        
+        root.destroy()
+    except Exception as e:
+        pass
+
 def on_change_port(icon, item):
     """更改服务端口"""
     import tkinter as tk
@@ -2420,14 +3701,22 @@ def on_change_port(icon, item):
                 )
                 
                 if result:
-                    # 保存新端口到全局变量
-                    app.current_port = new_port
-                    messagebox.showinfo(
-                        "端口更改成功", 
-                        f"端口已更改为: {new_port}\n"
-                        f"新的访问地址: http://{get_local_ip()}:{new_port}\n"
-                        f"程序将在3秒后重启..."
-                    )
+                    # 保存新端口到配置文件
+                    if save_port_config(new_port):
+                        messagebox.showinfo(
+                            "端口更改成功", 
+                            f"端口已更改为: {new_port}\n"
+                            f"新的访问地址: http://{get_local_ip()}:{new_port}\n"
+                            f"配置已保存，下次启动将自动使用新端口\n"
+                            f"程序将在3秒后重启..."
+                        )
+                    else:
+                        messagebox.showwarning(
+                            "端口更改成功", 
+                            f"端口已更改为: {new_port}，但配置保存失败\n"
+                            f"下次启动可能恢复默认端口\n"
+                            f"程序将在3秒后重启..."
+                        )
                     
                     # 重启程序
                     import subprocess
@@ -2435,8 +3724,8 @@ def on_change_port(icon, item):
                     root.destroy()
                     icon.stop()
                     
-                    # 启动新的实例
-                    subprocess.Popen([sys.executable] + sys.argv + [f'--port={new_port}'])
+                    # 启动新的实例（不再需要传递端口参数，因为已保存到配置文件）
+                    subprocess.Popen([sys.executable] + sys.argv)
                     sys.exit(0)
                     
             except socket.error:
@@ -2466,6 +3755,14 @@ def build_menu(icon):
         else:
             ip_status += " (静态)"
     
+    # 检查端口是否来自配置文件
+    config_port = get_config_port()
+    port_status = f"当前端口: {port}"
+    if port == config_port:
+        port_status += " ✅"
+    else:
+        port_status += " (临时)"
+    
     return pystray.Menu(
         pystray.MenuItem(f'服务地址: {ip}:{port}', on_show_ip_config),
         pystray.MenuItem(ip_status, None, enabled=False),
@@ -2476,11 +3773,19 @@ def build_menu(icon):
             pystray.MenuItem('启用DHCP', on_enable_dhcp),
         )),
         pystray.MenuItem('服务设置', pystray.Menu(
-            pystray.MenuItem(f'当前端口: {port}', None, enabled=False),
+            pystray.MenuItem(port_status, None, enabled=False),
             pystray.MenuItem('更改端口', on_change_port),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem('查看配置', on_view_config),
+            pystray.MenuItem('重置配置', on_reset_config),
         )),
         pystray.MenuItem('开机自启：' + ('已开启' if autostart else '未开启'), on_toggle_autostart),
         pystray.Menu.SEPARATOR,
+        # 只有在exe模式下才显示控制台控制选项
+        *([pystray.MenuItem(
+            '控制台：' + ('已显示' if CONSOLE_VISIBLE else '已隐藏'), 
+            toggle_console_window
+        ), pystray.Menu.SEPARATOR] if hasattr(sys, '_MEIPASS') else []),
         pystray.MenuItem('GitHub仓库', on_open_github),
         pystray.MenuItem('退出', on_quit)
     )
@@ -2488,34 +3793,38 @@ def build_menu(icon):
 def setup_tray():
     # 只使用logo.ico文件作为托盘图标
     try:
-        # 加载logo.ico文件
-        logo_path = resource_path('logo.ico')
-        print(f"尝试加载图标: {logo_path}")
+        # 加载logo.ico文件 - 改进路径查找逻辑
+        logo_path = None
         
-        if not os.path.exists(logo_path):
-            print(f"错误：logo.ico文件不存在于路径: {logo_path}")
-            # 尝试查找其他位置的图标文件
-            alternative_paths = [
-                os.path.join(os.path.dirname(__file__), 'logo.ico'),
-                os.path.join(os.getcwd(), 'logo.ico'),
-                'logo.ico'
-            ]
-            
-            logo_path = None
-            for alt_path in alternative_paths:
-                if os.path.exists(alt_path):
-                    logo_path = alt_path
-                    print(f"找到备用图标路径: {logo_path}")
-                    break
-            
-            if not logo_path:
-                print("未找到logo.ico文件，使用默认系统图标")
-                # 创建一个简单的默认图标
-                image = Image.new('RGB', (32, 32), color='blue')
-                draw = ImageDraw.Draw(image)
-                draw.text((8, 8), "P", fill='white')
+        # 候选路径列表，按优先级排序
+        candidate_paths = []
+        
+        if hasattr(sys, '_MEIPASS'):
+            # PyInstaller打包后的路径
+            candidate_paths.extend([
+                resource_path('logo.ico'),  # 打包内的资源
+                os.path.join(os.path.dirname(sys.executable), 'logo.ico'),  # exe同级目录
+            ])
         else:
-            print(f"图标文件存在: {logo_path}")
+            # 源码运行时的路径
+            candidate_paths.extend([
+                resource_path('logo.ico'),
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logo.ico'),
+                os.path.join(os.getcwd(), 'logo.ico'),
+            ])
+        
+        # 通用备选路径
+        candidate_paths.extend([
+            'logo.ico',  # 当前工作目录
+            os.path.join(APP_DIR, 'logo.ico'),  # 程序目录
+        ])
+        
+        # 查找第一个存在的图标文件
+        for path in candidate_paths:
+            if os.path.exists(path):
+                logo_path = path
+                print(f"找到图标文件: {logo_path}")
+                break
         
         if logo_path:
             try:
@@ -2523,11 +3832,10 @@ def setup_tray():
                 print(f"成功加载图标文件，尺寸: {image.size}")
             except Exception as e:
                 print(f"加载图标失败: {e}，使用默认图标")
-                # 创建默认图标
-                image = Image.new('RGB', (32, 32), color='blue')
-                draw = ImageDraw.Draw(image)
-                draw.text((8, 8), "P", fill='white')
-        else:
+                logo_path = None
+        
+        if not logo_path:
+            print("未找到logo.ico文件，创建默认图标")
             # 创建默认图标
             image = Image.new('RGB', (32, 32), color='blue')
             draw = ImageDraw.Draw(image)
@@ -2761,38 +4069,143 @@ def show_startup_tips():
     show_error_dialog("启动成功 - 使用提示", tips_msg, is_critical=False)
 
 def check_exe_environment():
-    """检查exe运行环境，针对PyInstaller打包的程序"""
+    """检查exe运行环境，针对PyInstaller打包的程序，特别针对Win11兼容性"""
     if not hasattr(sys, '_MEIPASS'):  # 不是PyInstaller打包的exe
         return []
     
     issues = []
     
     try:
-        # 检查是否有写入权限
-        test_file = os.path.join(os.path.dirname(sys.executable), 'test_write.tmp')
+        # Win11兼容性检查
+        import platform
+        windows_version = platform.platform()
+        print(f"🖥️ 系统信息: {windows_version}")
+        
+        # 检查是否为Windows 11
+        if "Windows-11" in windows_version or "Windows-10" in windows_version:
+            try:
+                # Win11特有检查：Windows Defender和SmartScreen
+                import subprocess
+                
+                # 检查程序是否被Windows Defender隔离
+                try:
+                    result = subprocess.run(['powershell', '-Command', 'Get-MpThreatDetection'], 
+                                          capture_output=True, text=True, timeout=10)
+                    if result.returncode == 0 and 'print_server' in result.stdout.lower():
+                        issues.append("程序可能被Windows Defender隔离，请添加到排除列表")
+                except:
+                    pass
+                
+                # 检查数字签名问题（Win11常见）
+                exe_path = sys.executable if hasattr(sys, '_MEIPASS') else __file__
+                print(f"📁 程序路径: {exe_path}")
+                
+                # 检查路径中是否包含中文或特殊字符
+                try:
+                    exe_path.encode('ascii')
+                except UnicodeEncodeError:
+                    issues.append("程序路径包含中文字符，可能在Win11下引起兼容性问题")
+                
+            except Exception as e:
+                print(f"⚠️ Win11兼容性检查部分失败: {e}")
+        
+        # 检查依赖库是否完整
+        critical_imports = [
+            ('win32print', 'pywin32'),
+            ('win32api', 'pywin32'),
+            ('win32gui', 'pywin32'),
+            ('pystray', 'pystray'),
+            ('PIL', 'Pillow'),
+            ('flask', 'Flask')
+        ]
+        
+        missing_libs = []
+        for lib, package in critical_imports:
+            try:
+                __import__(lib)
+                print(f"✅ {lib} 库加载成功")
+            except ImportError:
+                missing_libs.append(package)
+                print(f"❌ {lib} 库缺失")
+        
+        if missing_libs:
+            issues.append(f"缺少关键依赖库: {', '.join(missing_libs)}")
+    
+    except Exception as e:
+        print(f"⚠️ 依赖库检查失败: {e}")
+    
+    try:
+        # 检查程序目录是否有写入权限
+        app_dir = get_app_dir()
+        print(f"📁 程序目录: {app_dir}")
+        test_file = os.path.join(app_dir, 'test_write.tmp')
         try:
             with open(test_file, 'w') as f:
                 f.write('test')
             os.remove(test_file)
-        except Exception:
-            issues.append("程序所在目录无写入权限，请以管理员身份运行或移动到其他目录")
+            print("✅ 程序目录写入权限正常")
+        except Exception as e:
+            issues.append(f"程序目录 {app_dir} 无写入权限: {e}")
+            print(f"❌ 程序目录写入权限异常: {e}")
     
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"⚠️ 目录权限检查失败: {e}")
     
     try:
         # 检查临时目录权限
         temp_dir = os.environ.get('TEMP', 'C:\\temp')
+        print(f"📁 临时目录: {temp_dir}")
         test_temp = os.path.join(temp_dir, 'print_server_test.tmp')
         try:
             with open(test_temp, 'w') as f:
                 f.write('test')
             os.remove(test_temp)
-        except Exception:
-            issues.append("临时目录访问受限，可能影响文件处理功能")
+            print("✅ 临时目录访问正常")
+        except Exception as e:
+            issues.append(f"临时目录访问受限: {e}")
+            print(f"❌ 临时目录访问异常: {e}")
     
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"⚠️ 临时目录检查失败: {e}")
+    
+    try:
+        # 检查网络权限
+        import socket
+        test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        test_socket.bind(('127.0.0.1', 0))  # 绑定任意可用端口
+        test_port = test_socket.getsockname()[1]
+        test_socket.close()
+        print(f"✅ 网络端口 {test_port} 绑定测试成功")
+        
+    except Exception as e:
+        issues.append(f"网络权限受限，无法绑定端口: {e}")
+        print(f"❌ 网络权限检查失败: {e}")
+    
+    try:
+        # 检查防火墙设置（Win11常见问题）
+        import subprocess
+        
+        # 检查程序是否在防火墙例外列表中
+        try:
+            result = subprocess.run(['netsh', 'advfirewall', 'firewall', 'show', 'rule', 'name=all'], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode != 0:
+                print("⚠️ 无法检查防火墙设置，可能需要管理员权限")
+            else:
+                print("✅ 防火墙设置检查完成")
+        except:
+            print("⚠️ 防火墙检查跳过")
+            
+    except Exception as e:
+        print(f"⚠️ 防火墙检查失败: {e}")
+    
+    # 输出检查结果摘要
+    if issues:
+        print(f"\n⚠️ 发现 {len(issues)} 个潜在问题:")
+        for i, issue in enumerate(issues, 1):
+            print(f"   {i}. {issue}")
+    else:
+        print(f"\n✅ 环境检查通过，未发现明显问题")
     
     return issues
 
@@ -2802,6 +4215,33 @@ if __name__ == '__main__':
         if hasattr(sys, '_MEIPASS'):
             print("🔍 检测到exe文件运行模式")
             print("📦 内网打印服务 by 忆痕")
+            
+            # 询问是否隐藏控制台窗口
+            try:
+                import ctypes
+                from ctypes import wintypes
+                
+                # 获取控制台窗口句柄
+                kernel32 = ctypes.windll.kernel32
+                user32 = ctypes.windll.user32
+                
+                # 获取当前控制台窗口
+                CONSOLE_WINDOW = kernel32.GetConsoleWindow()
+                
+                if CONSOLE_WINDOW:
+                    # 给用户5秒时间看到启动信息
+                    print("⏰ 5秒后将自动隐藏控制台窗口...")
+                    print("💡 程序将在系统托盘中运行")
+                    print("💡 如需查看详细信息，右键托盘图标选择'控制台'")
+                    time.sleep(5)
+                    
+                    # 隐藏控制台窗口
+                    user32.ShowWindow(CONSOLE_WINDOW, 0)  # SW_HIDE = 0
+                    CONSOLE_VISIBLE = False
+                    print("✅ 控制台窗口已隐藏")  # 这个不会显示，但会记录在内存中
+            except Exception as e:
+                print(f"⚠️ 控制台窗口处理失败: {e}")
+            
             exe_issues = check_exe_environment()
             if exe_issues:
                 error_msg = """exe文件运行环境检查发现问题：
@@ -2809,38 +4249,76 @@ if __name__ == '__main__':
 问题：
 """ + '\n'.join(f"• {issue}" for issue in exe_issues) + """
 
-常见解决方案：
-1. 【推荐】右键程序图标 → "以管理员身份运行"
-2. 将程序移动到用户文档文件夹或桌面
-3. 检查杀毒软件是否阻止程序运行
-4. 确保已安装最新的 Microsoft Visual C++ Redistributable
+🔧 Win11用户专用解决方案：
+1. 【首选】右键程序图标 → "以管理员身份运行"
+2. 【重要】检查Windows Defender设置：
+   • 打开"Windows安全中心"
+   • 选择"病毒和威胁防护"
+   • 点击"管理设置"
+   • 添加"排除项" → "文件或文件夹" → 选择程序目录
+3. 【路径问题】将程序移动到英文路径：
+   • 避免中文文件夹名称
+   • 推荐路径：C:\\Tools\\PrintService\\
+4. 【SmartScreen】如遇"Windows已保护你的电脑"：
+   • 点击"更多信息" → "仍要运行"
+   • 或在"应用和浏览器控制"中调整设置
 
-下载链接：
+🔧 通用解决方案：
+5. 安装最新的 Microsoft Visual C++ Redistributable
+6. 检查杀毒软件是否误报
+7. 重启计算机后再次运行
+8. 使用"兼容性疑难解答"
+
+💾 下载链接：
 • VC++ x64: https://aka.ms/vs/17/release/vc_redist.x64.exe
 • VC++ x86: https://aka.ms/vs/17/release/vc_redist.x86.exe
 
-如果是首次运行，建议安装上述运行库后重启计算机。
+📞 如果问题持续，请携带错误信息联系：
+GitHub Issues: https://github.com/a937750307/lan-printing/issues
 
-开发者：忆痕 | GitHub: https://github.com/a937750307/lan-printing"""
+开发者：忆痕"""
                 
                 show_error_dialog("exe运行环境检查", error_msg, is_critical=False)
         
-        # 检查命令行参数中的端口设置
+        # 检查命令行参数中的端口设置，并加载配置文件
         import sys
-        port = 5000
+        port = get_config_port()  # 首先从配置文件获取端口
+        
+        # 命令行参数可以覆盖配置文件设置（用于临时更改）
         for arg in sys.argv:
             if arg.startswith('--port='):
                 try:
-                    port = int(arg.split('=')[1])
-                    app.current_port = port
+                    cmdline_port = int(arg.split('=')[1])
+                    port = cmdline_port
+                    print(f"ℹ️ 使用命令行指定端口: {port}")
                 except ValueError:
-                    print(f"警告: 无效的端口参数 {arg}，使用默认端口 5000")
+                    print(f"警告: 无效的端口参数 {arg}，使用配置文件端口 {port}")
+        
+        # 保存当前端口到应用对象
+        app.current_port = port
         
         print("=" * 60)
         print("              内网打印服务")
         print("              作者：忆痕")
         print("    GitHub: https://github.com/a937750307/lan-printing")
         print("=" * 60)
+        
+        # 显示路径信息（便于调试）
+        print(f"📂 程序目录: {APP_DIR}")
+        print(f"📂 上传目录: {UPLOAD_FOLDER}")
+        print(f"📂 配置文件: {CONFIG_FILE}")
+        print(f"📂 日志文件: {LOG_FILE}")
+        if hasattr(sys, '_MEIPASS'):
+            print(f"📦 运行模式: PyInstaller打包 (资源目录: {sys._MEIPASS})")
+        else:
+            print(f"📦 运行模式: 源码运行")
+        
+        # 显示端口信息
+        config_port = get_config_port()
+        if port == config_port:
+            print(f"🔧 使用配置端口: {port}")
+        else:
+            print(f"🔧 使用临时端口: {port} (配置端口: {config_port})")
         
         # 检查系统要求
         missing_modules, missing_components = check_system_requirements()
@@ -3016,11 +4494,12 @@ pip install pywin32 pystray pillow flask""")
             print("💡 右键托盘图标查看更多功能")
             
             # 首次启动时显示详细提示
-            if not os.path.exists('.startup_tip_shown'):
+            startup_tip_file = os.path.join(APP_DIR, '.startup_tip_shown')
+            if not os.path.exists(startup_tip_file):
                 show_startup_tips()
                 # 创建标记文件，避免每次启动都显示
                 try:
-                    with open('.startup_tip_shown', 'w') as f:
+                    with open(startup_tip_file, 'w') as f:
                         f.write('shown')
                 except:
                     pass
@@ -3028,26 +4507,90 @@ pip install pywin32 pystray pillow flask""")
         setup_tray()
         
     except KeyboardInterrupt:
-        print("\n程序被用户中断")
-        sys.exit(0)
+        print("\n🔄 程序被用户中断，正在退出...")
+        # 强制退出
+        import os
+        os._exit(0)
     except Exception as e:
-        error_msg = f"""程序启动时发生未知错误：
-
-错误信息: {str(e)}
-
-可能的解决方案：
-1. 以管理员权限运行程序
-2. 检查防火墙设置
-3. 确保 Python 版本兼容（建议 3.8+）
-4. 重新安装程序依赖
-
-如果问题持续，请访问：
-https://github.com/a937750307/lan-printing
-
-或联系技术支持提供以上错误信息。"""
+        # 获取更详细的系统信息用于诊断
+        try:
+            import platform
+            import traceback
+            
+            system_info = {
+                'system': platform.system(),
+                'release': platform.release(),
+                'version': platform.version(),
+                'machine': platform.machine(),
+                'processor': platform.processor(),
+                'python_version': platform.python_version(),
+            }
+            
+            # Win11特有错误分析
+            win11_hints = []
+            error_str = str(e).lower()
+            
+            if 'access' in error_str or 'permission' in error_str:
+                win11_hints.append("权限问题：请以管理员身份运行程序")
+            
+            if 'import' in error_str or 'module' in error_str:
+                win11_hints.append("依赖库缺失：程序打包可能不完整")
+            
+            if 'socket' in error_str or 'bind' in error_str:
+                win11_hints.append("网络权限：检查防火墙和Windows Defender设置")
+            
+            if 'file' in error_str or 'path' in error_str:
+                win11_hints.append("路径问题：避免中文路径，移动到英文目录")
+                
+            # 生成详细错误报告
+            full_traceback = traceback.format_exc()
+            
+        except:
+            system_info = {'error': '无法获取系统信息'}
+            win11_hints = []
+            full_traceback = str(e)
         
-        show_error_dialog("程序启动失败", error_msg)
-        print(f"\n严重错误: {e}")
+        error_msg = f"""程序启动时发生严重错误：
+
+💥 错误信息: {str(e)}
+
+🖥️ 系统信息:
+• 系统: {system_info.get('system', 'Unknown')} {system_info.get('release', 'Unknown')}
+• Python: {system_info.get('python_version', 'Unknown')}
+• 架构: {system_info.get('machine', 'Unknown')}
+
+🔍 Win11专用诊断:
+""" + '\n'.join(f"• {hint}" for hint in win11_hints) + f"""
+
+💡 解决方案：
+1. 【立即尝试】右键程序图标 → "以管理员身份运行"
+2. 【Win11专用】添加Windows Defender排除项：
+   • 开始菜单搜索"Windows安全中心"
+   • 病毒和威胁防护 → 管理设置 → 添加或删除排除项
+   • 添加文件夹：程序所在目录
+3. 【路径问题】移动程序到简单英文路径：
+   • 例如：C:\\Tools\\PrintService\\
+4. 【网络问题】检查防火墙设置：
+   • Windows设置 → 隐私和安全性 → Windows安全中心
+5. 【依赖问题】重新下载完整版程序
+
+🔗 获取帮助：
+• GitHub Issues: https://github.com/a937750307/lan-printing/issues
+• 提交时请包含上述系统信息和错误详情
+
+开发者：忆痕
+
+--- 技术详情 (请复制给开发者) ---
+{full_traceback}
+系统详情: {system_info}
+"""
+        
+        show_error_dialog("程序启动失败 - Win11兼容性", error_msg)
+        print(f"\n💥 严重错误: {e}")
+        print(f"📊 系统: {system_info}")
+        if win11_hints:
+            print(f"💡 Win11提示: {', '.join(win11_hints)}")
+        print("\n--- 完整错误信息 ---")
         import traceback
         traceback.print_exc()
         sys.exit(1)
