@@ -83,7 +83,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='内网打印服务',
+    name='print_server',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
