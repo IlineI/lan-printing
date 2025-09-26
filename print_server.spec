@@ -15,6 +15,8 @@ spec_root = os.path.dirname(os.path.abspath(SPEC))
 datas = [
     # 包含图标文件
     (os.path.join(spec_root, 'logo.ico'), '.'),
+    # 包含Windows修复工具
+    (os.path.join(spec_root, 'windows_repair_tool.py'), '.'),
     # 如果有其他资源文件，在这里添加
     # (os.path.join(spec_root, 'templates'), 'templates'),
 ]
@@ -36,13 +38,21 @@ hiddenimports = [
     'threading',
     'subprocess',
     'datetime',
+    'tkinter',
+    'tkinter.messagebox',  # 单实例检测对话框需要
+    # Windows修复工具依赖
+    'platform',
+    'ctypes',
+    'pathlib',
+    'time',
+    'traceback',
+    'windows_repair_tool',  # 确保修复工具模块被包含
 ]
 
 # 排除的模块（可选，减少文件大小）
 excludes = [
-    'tkinter',
     'matplotlib',
-    'numpy',
+    'numpy', 
     'pandas',
     'scipy',
 ]
