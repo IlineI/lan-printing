@@ -21,6 +21,9 @@ import socket
 import winreg
 import time
 import json
+# 进程检测相关
+import tkinter as tk
+from tkinter import messagebox
 
 # Windows DeviceCapabilities 常量
 DC_DUPLEX = 7
@@ -60,10 +63,114 @@ PAPER_NAMES = {
     12: "B4 (250 x 354 mm)",
     13: "B5 (182 x 257 mm)",
 }
+
+class PathManager:
+    """统一路径管理器"""
+    
+    def __init__(self):
+        self._is_packaged = hasattr(sys, '_MEIPASS')
+        self._app_dir = None
+        self._resource_dir = None
+        self._data_dir = None
+        self._init_paths()
+    
+    def _init_paths(self):
+        """初始化路径配置"""
+        if self._is_packaged:
+            # PyInstaller打包后的路径配置
+            self._resource_dir = sys._MEIPASS  # 打包内的资源目录
+            self._app_dir = os.path.dirname(sys.executable)  # exe所在目录
+            self._data_dir = self._app_dir  # 数据文件存储目录
+        else:
+            # 源码运行时的路径配置
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            self._resource_dir = script_dir  # 资源和源码在同一目录
+            self._app_dir = script_dir  # 应用目录
+            self._data_dir = script_dir  # 数据文件存储目录
+    
+    @property
+    def is_packaged(self):
+        """是否为打包后的exe文件"""
+        return self._is_packaged
+    
+    @property
+    def app_dir(self):
+        """应用主目录（exe所在目录或脚本所在目录）"""
+        return self._app_dir
+    
+    def get_resource_path(self, relative_path):
+        """获取资源文件的完整路径（图标、模板等）"""
+        return os.path.join(self._resource_dir, relative_path)
+    
+    def get_data_path(self, relative_path):
+        """获取数据文件的完整路径（配置、日志、上传文件等）"""
+        return os.path.join(self._data_dir, relative_path)
+    
+    def get_config_path(self):
+        """获取配置文件路径"""
+        return self.get_data_path('config.json')
+    
+    def get_log_path(self):
+        """获取日志文件路径"""
+        return self.get_data_path('print_log.txt')
+    
+    def get_upload_dir(self):
+        """获取上传文件目录"""
+        return self.get_data_path('uploads')
+    
+    def get_executable_name(self):
+        """获取当前执行文件名（用于进程检测）"""
+        if self._is_packaged:
+            return os.path.basename(sys.executable)
+        else:
+            return os.path.basename(sys.argv[0])
+    
+    def ensure_data_dirs(self):
+        """确保数据目录存在"""
+        try:
+            upload_dir = self.get_upload_dir()
+            os.makedirs(upload_dir, exist_ok=True)
+            return True
+        except Exception as e:
+            print(f"⚠️ 创建数据目录失败: {e}")
+            return False
+
+# 创建全局路径管理器实例
+path_manager = PathManager()
+
+# 全局服务状态管理
+class ServiceManager:
+    """服务管理器，用于管理Flask服务和程序重启"""
+    def __init__(self):
+        self.flask_thread = None
+        self.cleaner_thread = None
+        self.should_restart = False
+        self.restart_port = None
+    
+    def set_restart(self, port):
+        """设置重启标志和新端口"""
+        self.should_restart = True
+        self.restart_port = port
+    
+    def is_restart_requested(self):
+        """检查是否需要重启"""
+        return self.should_restart
+    
+    def get_restart_port(self):
+        """获取重启端口"""
+        return self.restart_port
+    
+    def clear_restart(self):
+        """清除重启标志"""
+        self.should_restart = False
+        self.restart_port = None
+
+service_manager = ServiceManager()
+
 def clean_old_files(folder=None, expire_seconds=3600):
     """定期清理指定目录下超过expire_seconds的文件"""
     if folder is None:
-        folder = UPLOAD_FOLDER
+        folder = path_manager.get_upload_dir()
     while True:
         now = time.time()
         for fname in os.listdir(folder):
@@ -75,18 +182,9 @@ def clean_old_files(folder=None, expire_seconds=3600):
                 except Exception:
                     pass
         time.sleep(60)  # 每1分钟检查一次
- 
-# 配置文件路径 - 保存在程序同级目录下
-def get_config_file_path():
-    """获取配置文件路径，兼容源码和打包后的情况"""
-    if hasattr(sys, '_MEIPASS'):
-        # PyInstaller打包后，配置文件保存在exe文件同级目录
-        return os.path.join(os.path.dirname(sys.executable), 'config.json')
-    else:
-        # 源码运行时，配置文件保存在脚本同级目录
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
 
-CONFIG_FILE = get_config_file_path()
+# 使用路径管理器获取配置文件路径
+CONFIG_FILE = path_manager.get_config_path()
 
 def load_config():
     """加载配置文件"""
@@ -128,11 +226,94 @@ def save_port_config(port):
     config['port'] = port
     return save_config(config)
 
-# 兼容PyInstaller打包和源码运行的资源路径
-def resource_path(relative_path):
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath("."), relative_path)
+# 检测程序是否已经在运行
+def check_single_instance():
+    """检测程序是否已经在运行，如果是则显示友好提示"""
+    try:
+        current_pid = os.getpid()
+        current_name = path_manager.get_executable_name()
+        
+        # 使用tasklist命令检查进程
+        result = subprocess.run(['tasklist', '/fi', f'imagename eq {current_name}'], 
+                              capture_output=True, text=True, encoding='gbk')
+        
+        if result.returncode == 0:
+            lines = result.stdout.split('\n')
+            running_processes = []
+            
+            for line in lines:
+                if current_name.lower() in line.lower():
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        try:
+                            pid = int(parts[1])
+                            if pid != current_pid:  # 不是当前进程
+                                running_processes.append(pid)
+                        except ValueError:
+                            continue
+            
+            if running_processes:
+                return True, len(running_processes)
+        
+        return False, 0
+        
+    except Exception as e:
+        # 如果检测失败，假设没有运行的实例
+        print(f"⚠️ 单实例检测失败: {e}")
+        return False, 0
+
+def show_already_running_dialog(count):
+    """显示程序已运行的友好提示对话框"""
+    try:
+        # 隐藏tkinter主窗口
+        root = tk.Tk()
+        root.withdraw()
+        
+        # 设置对话框内容
+        title = "内网打印服务 - 程序已在运行"
+        message = f"""🖨️ 内网打印服务已经在运行中！
+
+当前检测到 {count} 个正在运行的实例。
+
+💡 如何访问服务：
+• 查看系统托盘区域的打印机图标
+• 左键点击图标打开网页控制台
+• 右键点击图标进行各项设置
+
+⚠️ 为避免端口冲突和资源浪费，建议：
+• 关闭重复运行的程序实例
+• 如需重启服务，请先退出现有实例
+
+是否要强制启动新实例？
+（不推荐，可能会导致端口冲突）"""
+        
+        # 显示对话框
+        result = messagebox.askyesno(title, message, icon='warning')
+        root.destroy()
+        
+        return result  # True=强制启动, False=退出
+        
+    except Exception as e:
+        print(f"⚠️ 对话框显示失败: {e}")
+        # 如果GUI对话框失败，使用控制台提示
+        print(f"\n{'='*60}")
+        print("🖨️ 内网打印服务 - 程序已在运行")
+        print(f"{'='*60}")
+        print(f"当前检测到 {count} 个正在运行的实例。")
+        print("\n💡 如何访问服务：")
+        print("• 查看系统托盘区域的打印机图标")
+        print("• 左键点击图标打开网页控制台")
+        print("• 右键点击图标进行各项设置")
+        print("\n⚠️ 为避免端口冲突，建议关闭重复运行的实例")
+        
+        while True:
+            choice = input("\n是否要强制启动新实例？(y/n): ").lower().strip()
+            if choice in ['y', 'yes', '是']:
+                return True
+            elif choice in ['n', 'no', '否']:
+                return False
+            else:
+                print("请输入 y 或 n")
  
 # 获取本机局域网IP
 def get_local_ip():
@@ -367,20 +548,10 @@ app = Flask(__name__)
 app.secret_key = 'print_server_secret_key'
 
 # 兼容PyInstaller打包的路径处理
-def get_app_dir():
-    """获取程序运行目录，兼容源码和打包后的情况"""
-    if hasattr(sys, '_MEIPASS'):
-        # PyInstaller打包后，使用exe文件所在目录
-        return os.path.dirname(sys.executable)
-    else:
-        # 源码运行时，使用脚本所在目录
-        return os.path.dirname(os.path.abspath(__file__))
-
-# 文件夹和文件路径配置
-APP_DIR = get_app_dir()
-UPLOAD_FOLDER = os.path.join(APP_DIR, 'uploads')
-LOG_FILE = os.path.join(APP_DIR, 'print_log.txt')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# 使用路径管理器配置文件夹和文件路径
+UPLOAD_FOLDER = path_manager.get_upload_dir()
+LOG_FILE = path_manager.get_log_path()
+path_manager.ensure_data_dirs()
 
 # 虚拟打印机名称列表（这些不是真正的物理打印机）
 VIRTUAL_PRINTERS = {
@@ -3062,7 +3233,12 @@ def run_repair_tool():
         import subprocess
         import sys
         
-        repair_script = os.path.join(os.path.dirname(__file__), 'windows_repair_tool.py')
+        # 使用路径管理器获取修复工具路径
+        repair_script = path_manager.get_data_path('windows_repair_tool.py')
+        
+        # 如果在exe环境且数据目录没有修复工具，尝试从资源目录获取
+        if not os.path.exists(repair_script) and path_manager.is_packaged:
+            repair_script = path_manager.get_resource_path('windows_repair_tool.py')
         
         if not os.path.exists(repair_script):
             return jsonify({
@@ -3433,26 +3609,40 @@ def download_file(filename):
 def run_flask():
     # 开发环境使用 Flask 内置服务器
     port = getattr(app, 'current_port', 5000)
-    app.run(host='0.0.0.0', port=port)
+    try:
+        app.run(host='0.0.0.0', port=port, use_reloader=False, threaded=True)
+    except OSError as e:
+        if "Address already in use" in str(e):
+            print(f"⚠️ 端口 {port} 已被占用，Flask服务启动失败")
+        else:
+            print(f"⚠️ Flask服务启动失败: {e}")
 
 def run_wsgi():
     # 生产环境推荐使用 waitress
     try:
         from waitress import serve
         port = getattr(app, 'current_port', 5000)
-        serve(app, host='0.0.0.0', port=port)
+        serve(app, host='0.0.0.0', port=port, threads=6)
     except ImportError:
         print("Waitress未安装，使用Flask内置服务器")
-        port = getattr(app, 'current_port', 5000)
-        app.run(host='0.0.0.0', port=port)
+        run_flask()
+    except OSError as e:
+        if "Address already in use" in str(e):
+            print(f"⚠️ 端口 {port} 已被占用，WSGI服务启动失败")
+        else:
+            print(f"⚠️ WSGI服务启动失败: {e}")
  
  
 def on_quit(icon, item):
     print("🔄 正在退出程序...")
     
+    # 清除任何重启标志（不再自动重启）
+    service_manager.clear_restart()
+    
     # 停止托盘图标
     icon.stop()
     
+    print("� 程序已退出。如有端口更改，请手动重新运行程序。")
     # 尝试优雅关闭Flask应用（如果有全局引用的话）
     try:
         if hasattr(app, 'shutdown'):
@@ -3607,8 +3797,8 @@ def on_view_config(icon, item):
 {json.dumps(config, ensure_ascii=False, indent=2) if config else '{}'}
 
 说明：
-• 端口设置会在程序重启后自动应用
-• 配置文件保存在用户桌面目录
+• 端口设置保存后需要手动重新运行程序才能生效
+• 配置文件保存在用户桌面目录  
 • 可通过托盘菜单修改端口设置"""
         
         import tkinter as tk
@@ -3696,8 +3886,10 @@ def on_change_port(icon, item):
                 # 端口可用，提示用户重启服务
                 result = messagebox.askyesno(
                     "端口更改确认",
-                    f"将端口从 {current_port} 更改为 {new_port}\n"
-                    f"需要重启服务才能生效，是否继续？"
+                    f"将端口从 {current_port} 更改为 {new_port}\n\n"
+                    f"⚠️ 注意：更改端口后需要手动重新运行程序才能生效\n"
+                    f"程序将在保存配置后自动退出\n\n"
+                    f"是否继续更改端口？"
                 )
                 
                 if result:
@@ -3707,26 +3899,22 @@ def on_change_port(icon, item):
                             "端口更改成功", 
                             f"端口已更改为: {new_port}\n"
                             f"新的访问地址: http://{get_local_ip()}:{new_port}\n"
-                            f"配置已保存，下次启动将自动使用新端口\n"
-                            f"程序将在3秒后重启..."
+                            f"配置已保存！\n\n"
+                            f"⚠️ 请手动重新运行程序以应用新端口设置"
                         )
                     else:
                         messagebox.showwarning(
-                            "端口更改成功", 
+                            "端口更改", 
                             f"端口已更改为: {new_port}，但配置保存失败\n"
-                            f"下次启动可能恢复默认端口\n"
-                            f"程序将在3秒后重启..."
+                            f"下次启动可能恢复默认端口\n\n"
+                            f"⚠️ 请手动重新运行程序以应用新端口设置"
                         )
                     
-                    # 重启程序
-                    import subprocess
-                    import sys
+                    # 不再尝试自动重启，直接退出程序
                     root.destroy()
-                    icon.stop()
                     
-                    # 启动新的实例（不再需要传递端口参数，因为已保存到配置文件）
-                    subprocess.Popen([sys.executable] + sys.argv)
-                    sys.exit(0)
+                    # 停止托盘图标，退出程序
+                    icon.stop()
                     
             except socket.error:
                 messagebox.showerror("端口错误", f"端口 {new_port} 已被占用，请选择其他端口")
@@ -3802,13 +3990,13 @@ def setup_tray():
         if hasattr(sys, '_MEIPASS'):
             # PyInstaller打包后的路径
             candidate_paths.extend([
-                resource_path('logo.ico'),  # 打包内的资源
+                path_manager.get_resource_path('logo.ico'),  # 打包内的资源
                 os.path.join(os.path.dirname(sys.executable), 'logo.ico'),  # exe同级目录
             ])
         else:
             # 源码运行时的路径
             candidate_paths.extend([
-                resource_path('logo.ico'),
+                path_manager.get_resource_path('logo.ico'),
                 os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logo.ico'),
                 os.path.join(os.getcwd(), 'logo.ico'),
             ])
@@ -3816,7 +4004,7 @@ def setup_tray():
         # 通用备选路径
         candidate_paths.extend([
             'logo.ico',  # 当前工作目录
-            os.path.join(APP_DIR, 'logo.ico'),  # 程序目录
+            path_manager.get_data_path('logo.ico'),  # 程序目录
         ])
         
         # 查找第一个存在的图标文件
@@ -4136,7 +4324,7 @@ def check_exe_environment():
     
     try:
         # 检查程序目录是否有写入权限
-        app_dir = get_app_dir()
+        app_dir = path_manager.app_dir
         print(f"📁 程序目录: {app_dir}")
         test_file = os.path.join(app_dir, 'test_write.tmp')
         try:
@@ -4211,6 +4399,22 @@ def check_exe_environment():
 
 if __name__ == '__main__':
     try:
+        # 🔍 单实例检测 - 防止重复运行
+        print("🔍 检测程序运行状态...")
+        is_running, count = check_single_instance()
+        
+        if is_running:
+            print(f"⚠️ 检测到程序已在运行（{count} 个实例）")
+            should_continue = show_already_running_dialog(count)
+            
+            if not should_continue:
+                print("✋ 用户选择退出，避免重复运行")
+                sys.exit(0)
+            else:
+                print("⚠️ 用户选择强制启动，可能会有端口冲突")
+        else:
+            print("✅ 未检测到运行中的实例，正常启动")
+        
         # 特殊检查：如果是exe文件运行
         if hasattr(sys, '_MEIPASS'):
             print("🔍 检测到exe文件运行模式")
@@ -4304,7 +4508,7 @@ GitHub Issues: https://github.com/a937750307/lan-printing/issues
         print("=" * 60)
         
         # 显示路径信息（便于调试）
-        print(f"📂 程序目录: {APP_DIR}")
+        print(f"📂 程序目录: {path_manager.app_dir}")
         print(f"📂 上传目录: {UPLOAD_FOLDER}")
         print(f"📂 配置文件: {CONFIG_FILE}")
         print(f"📂 日志文件: {LOG_FILE}")
@@ -4473,15 +4677,15 @@ pip install pywin32 pystray pillow flask""")
             sys.exit(1)
         
         # 启动定期清理线程
-        cleaner_thread = threading.Thread(target=clean_old_files, daemon=True)
-        cleaner_thread.start()
+        service_manager.cleaner_thread = threading.Thread(target=clean_old_files, daemon=True)
+        service_manager.cleaner_thread.start()
         
         # 判断是否为生产环境
         if os.environ.get('USE_WSGI', '').lower() == 'true':
-            flask_thread = threading.Thread(target=run_wsgi, daemon=True)
+            service_manager.flask_thread = threading.Thread(target=run_wsgi, daemon=True)
         else:
-            flask_thread = threading.Thread(target=run_flask, daemon=True)
-        flask_thread.start()
+            service_manager.flask_thread = threading.Thread(target=run_flask, daemon=True)
+        service_manager.flask_thread.start()
         
         # 等待Flask服务启动
         print("⏳ 正在启动Web服务...")
@@ -4494,7 +4698,7 @@ pip install pywin32 pystray pillow flask""")
             print("💡 右键托盘图标查看更多功能")
             
             # 首次启动时显示详细提示
-            startup_tip_file = os.path.join(APP_DIR, '.startup_tip_shown')
+            startup_tip_file = path_manager.get_data_path('.startup_tip_shown')
             if not os.path.exists(startup_tip_file):
                 show_startup_tips()
                 # 创建标记文件，避免每次启动都显示
