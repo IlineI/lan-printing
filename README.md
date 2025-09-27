@@ -1,6 +1,7 @@
 # 内网打印服务1.4（已实测Win7/Win10，可正常打印）
-## 下载仓库的print_server-1.4.exe文件，运行即可。
-## 也可选择下载源文件zip，运行print_server.py（稳定性要比exe强）
+**下载仓库的print_server-1.4.exe文件，并创建一个英文文件夹，把exe文件放里面，运行即可**
+
+**也可选择下载源文件zip，运行print_server.py（稳定性要比exe强），需要安装依赖，[参考print_server.spec文件](print_server.spec)**
 
 > 作者：忆痕 | GitHub: https://github.com/a937750307/lan-printing
 
