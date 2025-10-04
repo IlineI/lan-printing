@@ -8,6 +8,7 @@ from flask import Flask, request, render_template_string, send_from_directory, r
 # 打印相关
 import win32print
 import win32api
+import win32gui
 import win32con
 import subprocess
 import time
@@ -2639,83 +2640,8 @@ def print_pdf_with_settings(filepath, printer_name, copies, duplex, papersize, q
     try:
         print(f"打印PDF文件: {filepath}")
         
-        # 优先尝试使用WPS PDF阅读器
-        wps_paths = [
-            r"C:\\Program Files (x86)\\Kingsoft\\WPS Office\\ksopdfreader.exe",
-            r"C:\\Program Files\\Kingsoft\\WPS Office\\ksopdfreader.exe",
-            r"C:\\Users\\{}\\AppData\\Local\\Kingsoft\\WPS Office\\ksopdfreader.exe".format(os.environ.get('USERNAME', '')),
-            r"C:\\Program Files (x86)\\Kingsoft\\WPS Office\\office6\\wpsoffice.exe",
-            r"C:\\Program Files\\Kingsoft\\WPS Office\\office6\\wpsoffice.exe"
-        ]
+         # 尝试使用Adobe Reader静默打印
         
-        print("🥇 优先尝试WPS PDF阅读器...")
-        for wps_path in wps_paths:
-            if os.path.exists(wps_path):
-                try:
-                    # 应用打印设置
-                    _ = apply_printer_settings(printer_name, copies, duplex, papersize, quality)
-                    
-                    # WPS静默打印命令
-                    cmd = f'"{wps_path}" /p "{filepath}"'
-                    print(f"使用WPS打印: {cmd}")
-                    
-                    result = os.system(cmd)
-                    if result == 0:
-                        print("✅ WPS PDF打印命令执行成功")
-                        return True, "WPS PDF打印成功"
-                except Exception as e:
-                    print(f"❌ WPS打印失败: {e}")
-                    continue
-        
-        # 尝试使用Microsoft Edge PDF查看器（改进版）
-        print("🥈 尝试使用Microsoft Edge PDF查看器...")
-        try:
-            edge_paths = [
-                r"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-                r"C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"
-            ]
-            
-            for edge_path in edge_paths:
-                if os.path.exists(edge_path):
-                    _ = apply_printer_settings(printer_name, copies, duplex, papersize, quality)
-                    
-                    # 尝试多种Edge打印方法
-                    success_count = 0
-                    for i in range(copies):
-                        try:
-                            # 方法1: 尝试使用printto
-                            result = win32api.ShellExecute(
-                                0, 'printto', filepath, f'"{printer_name}"', None, win32con.SW_HIDE
-                            )
-                            
-                            if result > 32:
-                                success_count += 1
-                                print(f"✅ Edge printto 第{i+1}份成功")
-                            else:
-                                # 方法2: 尝试默认打印
-                                result2 = win32api.ShellExecute(
-                                    0, 'print', filepath, '', '.', win32con.SW_HIDE
-                                )
-                                if result2 > 32:
-                                    success_count += 1
-                                    print(f"✅ 默认打印 第{i+1}份成功")
-                                else:
-                                    print(f"⚠️ 打印失败 第{i+1}份 - 错误代码: {result}, {result2}")
-                                    
-                            time.sleep(2)
-                            
-                        except Exception as e:
-                            print(f"❌ 第{i+1}份打印异常: {e}")
-                    
-                    if success_count > 0:
-                        return True, f"系统默认PDF打印成功 ({success_count}/{copies}份)"
-                    break
-                    
-        except Exception as e:
-            print(f"❌ Edge打印失败: {e}")
-        
-        # 尝试使用Adobe Reader（备用方案）
-        print("🥉 备用方案：尝试Adobe Reader...")
         adobe_paths = [
             r"C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\Acrobat.exe",
             r"C:\\Program Files (x86)\\Adobe\\Acrobat Reader DC\\Reader\\AcroRd32.exe",
@@ -2725,124 +2651,96 @@ def print_pdf_with_settings(filepath, printer_name, copies, duplex, papersize, q
         for adobe_path in adobe_paths:
             if os.path.exists(adobe_path):
                 try:
-                    _ = apply_printer_settings(printer_name, copies, duplex, papersize, quality)
-                    
-                    # Adobe Reader静默打印
+                    # 构建Adobe Reader打印命令
                     cmd = f'"{adobe_path}" /p /h "{filepath}"'
                     print(f"使用Adobe Reader打印: {cmd}")
                     
+                    # 尝试应用打印设置（部分阅读器可能不生效）
+                    _ = apply_printer_settings(printer_name, copies, duplex, papersize, quality)
+                    
+                    # 执行打印命令
                     result = os.system(cmd)
                     if result == 0:
-                        print("✅ Adobe Reader打印命令执行成功")
-                        return True, "Adobe Reader打印成功"
+                        print("Adobe Reader打印命令执行成功")
+                        return True
                 except Exception as e:
-                    print(f"❌ Adobe Reader打印失败: {e}")
+                    print(f"Adobe Reader打印失败: {e}")
                     continue
         
-        # 最后回退到系统默认打印
-        print("🔄 所有专用阅读器均不可用，使用系统默认方式...")
-        fallback_result = print_pdf_silent(filepath, printer_name, copies)
-        if fallback_result and fallback_result[0]:
-            return fallback_result
-        
-        # 如果所有方法都失败，返回有用的错误信息
-        error_msg = """PDF打印失败：系统中未检测到可用的PDF阅读器。
-
-解决方案：
-1. 安装 Adobe Acrobat Reader DC（推荐）
-2. 安装 WPS Office（免费，包含PDF阅读器）
-3. 右键PDF文件 → 打开方式 → Microsoft Edge，然后手动打印
-4. 手动双击打开PDF文件，然后按Ctrl+P打印
-
-或联系管理员安装PDF阅读软件。"""
-        
-        return False, error_msg
+        # 如果Adobe Reader不可用，回退到简单打印
+        return print_pdf_silent(filepath, printer_name, copies)
         
     except Exception as e:
         print(f"PDF打印失败: {e}")
-        return False, f"PDF打印异常: {str(e)}"
+        return False
 
 def print_with_shell_execute(filepath, printer_name, copies):
-    """使用ShellExecute进行应用程序调用打印，确保使用指定打印机"""
+    """使用ShellExecute进行应用程序调用打印"""
     try:
         print(f"🚀 使用ShellExecute打印: {filepath} -> {printer_name}")
         success_count = 0
         for i in range(copies):
             try:
-                # 使用printto指定打印机
+                # 使用关联的应用程序打印
                 result = win32api.ShellExecute(
                     0,  # hwnd
-                    'printto',  # operation - 使用printto指定打印机
+                    'print',  # operation
                     filepath,  # file
-                    f'"{printer_name}"',  # parameters - 打印机名称
+                    None,  # parameters
                     None,  # directory
                     0  # show command (SW_HIDE)
                 )
                 
                 if result > 32:  # ShellExecute成功
                     success_count += 1
-                    print(f"✅ 第{i+1}份打印任务已发送")
-                    time.sleep(2)  # 给应用程序更多时间处理
+                    time.sleep(1)  # 给应用程序时间处理
                 else:
-                    print(f"❌ printto到{printer_name}失败，错误代码: {result}")
+                    print(f"ShellExecute失败，错误代码: {result}")
                     
             except Exception as e:
-                print(f"❌ 打印第{i+1}份时出错: {e}")
+                print(f"打印第{i+1}份时出错: {e}")
                 
         if success_count > 0:
-            return True, f"通过关联应用程序打印已发送到 {printer_name} ({success_count}/{copies}份)"
+            return True, f"通过关联应用程序打印已发送 ({success_count}/{copies}份)"
         else:
-            return False, f"无法打印到指定打印机 {printer_name}，请检查打印机状态和文件关联程序"            
+            return False, "所有打印尝试都失败了"
     except Exception as e:
-        return False, f"指定打印机打印失败: {str(e)}"
+        return False, f"ShellExecute打印失败: {str(e)}"
 
 def print_file_silent_fallback(filepath, printer_name, copies=1):
-    """备用的静默打印方案，确保使用指定打印机"""
+    """备用的静默打印方案"""
     try:
-        # 方案1: 使用ShellExecute的printto静默打印
-        success_count = 0
+        # 方案1: 使用ShellExecute的静默打印
         for i in range(copies):
-            result = win32api.ShellExecute(
+            win32api.ShellExecute(
                 0, 
-                'printto', 
+                'print', 
                 filepath, 
-                f'"{printer_name}"',  # 直接指定打印机名称
+                f'/d:"{printer_name}"', 
                 '.', 
                 win32con.SW_HIDE  # 隐藏窗口
             )
-            if result > 32:
-                success_count += 1
-                time.sleep(1)
-            else:
-                print(f"printto失败，错误代码: {result}")
-        
-        if success_count > 0:
-            return True, f"静默打印任务已发送到 {printer_name} ({success_count}/{copies}份)"
-        else:
-            # 如果printto全部失败，尝试其他方法而不是回退到默认打印机
-            raise Exception("printto方法失败")
+        return True, f"静默打印任务已发送到 {printer_name} ({copies}份)"
         
     except Exception as e1:
         try:
-            # 方案2: 使用批处理文件指定打印机
+            # 方案2: 使用命令行静默打印
             import tempfile
             
-            # 创建批处理文件进行打印机指定打印
+            # 创建批处理文件进行静默打印
             bat_content = f'''@echo off
 for /L %%i in (1,1,{copies}) do (
-    rundll32.exe printui.dll,PrintUIEntry /o /n "{printer_name}" /f "{filepath}"
-    timeout /t 2 /nobreak >nul
+    start /min "" "{filepath}"
 )
 '''
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.bat', delete=False, encoding='gbk') as bat_file:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.bat', delete=False) as bat_file:
                 bat_file.write(bat_content)
                 bat_file_path = bat_file.name
             
             # 静默执行批处理文件
-            result = subprocess.run([bat_file_path], 
-                         capture_output=True,
+            subprocess.run([bat_file_path], 
                          creationflags=subprocess.CREATE_NO_WINDOW,
-                         shell=True, timeout=60)
+                         shell=True)
             
             # 清理临时文件
             try:
@@ -2850,42 +2748,15 @@ for /L %%i in (1,1,{copies}) do (
             except:
                 pass
                 
-            if result.returncode == 0:
-                return True, f"批处理打印任务已发送到 {printer_name} ({copies}份)"
-            else:
-                print(f"批处理打印失败: {result.stderr}")
-                raise Exception("批处理方法失败")
+            return True, f"静默打印任务已发送 ({copies}份) - 备用方案"
             
         except Exception as e2:
             try:
-                # 方案3: 使用WIN32 API直接打印（适用于文本文件）
-                file_ext = os.path.splitext(filepath)[1].lower()
-                if file_ext == '.txt':
-                    return print_text_direct_to_printer(filepath, printer_name, copies)
-                else:
-                    # 最后尝试一次系统默认打印
-                    print(f"🔄 最后尝试系统默认打印: {filepath}")
-                    try:
-                        result = win32api.ShellExecute(
-                            0, 'print', filepath, '', '.', win32con.SW_HIDE
-                        )
-                        if result > 32:
-                            return True, f"系统默认打印成功（可能会弹出打印对话框）"
-                        else:
-                            print(f"系统默认打印失败，错误代码: {result}")
-                    except Exception as default_print_error:
-                        print(f"系统默认打印异常: {default_print_error}")
-                    
-                    # 细化的错误信息
-                    filename = os.path.basename(filepath)
-                    if file_ext in ['.pdf']:
-                        error_msg = f"PDF文件 '{filename}' 打印失败。请安装PDF阅读器（如Adobe Reader、WPS Office）后重试。"
-                    elif file_ext in ['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx']:
-                        error_msg = f"Office文档 '{filename}' 打印失败。请安装Office软件（如Microsoft Office、WPS Office、LibreOffice）后重试。"
-                    else:
-                        error_msg = f"文件 '{filename}' 打印失败。系统中没有适合的应用程序来打印此文件类型。"
-                    
-                    return False, error_msg
+                # 方案3: 最基础的静默方式
+                for i in range(copies):
+                    subprocess.run(['rundll32.exe', 'mshtml.dll,PrintHTML', filepath],
+                                 creationflags=subprocess.CREATE_NO_WINDOW)
+                return True, f"基础静默打印已执行 ({copies}份)"
             except Exception as e3:
                 return False, f"所有静默打印方案都失败: {str(e3)}"
 
@@ -2955,115 +2826,66 @@ def print_text_direct_to_printer(filepath, printer_name, copies=1):
         return False, f"直接打印失败: {str(e)}"
 
 def print_pdf_silent(filepath, printer_name, copies=1):
-    """专门用于PDF文件的静默打印，优先使用Adobe Reader"""
+    """专门用于PDF文件的静默打印"""
     try:
-        # 方案1: 优先使用PowerShell和Adobe COM对象实现完全静默打印
-        print("🥇 优先尝试Adobe COM静默打印...")
-        adobe_com_result = print_pdf_adobe_com(filepath, printer_name, copies)
-        if adobe_com_result and adobe_com_result[0]:
-            return adobe_com_result
-            
-        # 方案2: 尝试Adobe Reader命令行（可能有界面闪烁）
-        print("🥈 尝试Adobe Reader命令行...")
+        # 方案1: 使用Adobe Reader的命令行静默打印
         adobe_paths = [
             r"C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe",
             r"C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe",
             r"C:\Program Files\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe",
             r"C:\Program Files (x86)\Adobe\Reader 11.0\Reader\AcroRd32.exe",
-            r"C:\Program Files\Adobe\Reader 11.0\Reader\AcroRd32.exe",
-            r"C:\Program Files (x86)\Adobe\Reader 10.0\Reader\AcroRd32.exe"
         ]
         
+        adobe_found = False
         for adobe_path in adobe_paths:
             if os.path.exists(adobe_path):
+                adobe_found = True
                 try:
-                    print(f"✅ 找到Adobe Reader: {adobe_path}")
-                    # 使用START /MIN隐藏窗口
                     for i in range(copies):
-                        cmd = f'START /MIN "" "{adobe_path}" /t "{filepath}" "{printer_name}"'
-                        result = subprocess.run(cmd, shell=True, 
-                                              capture_output=True,
+                        # 使用/t参数进行静默打印
+                        cmd = [adobe_path, '/t', filepath, printer_name]
+                        result = subprocess.run(cmd, 
+                                              capture_output=True, 
                                               creationflags=subprocess.CREATE_NO_WINDOW,
-                                              timeout=30)
-                        
-                        if result.returncode == 0:
-                            print(f"✅ 第{i+1}份 Adobe PDF打印已发送")
-                        time.sleep(2)
-                    
-                    return True, f"Adobe Reader PDF打印已发送到 {printer_name} ({copies}份)"
-                    
+                                              timeout=30)  # 30秒超时
+                        time.sleep(2)  # 给打印机时间处理
+                    return True, f"Adobe PDF静默打印已发送到 {printer_name} ({copies}份)"
+                except subprocess.TimeoutExpired:
+                    return False, "Adobe Reader打印超时"
                 except Exception as e:
-                    print(f"❌ Adobe Reader打印失败: {e}")
-                    continue
-                    
-        print("⚠️ 未找到可用的Adobe Reader，尝试其他方案...")
+                    print(f"Adobe Reader打印失败: {e}")
+                    break
         
-        # 方案2: 使用系统默认方式（如果Adobe Reader不可用）
-        print("🥈 使用系统默认方式打印PDF...")
-        try:
-            success_count = 0
-            for i in range(copies):
-                # 使用printto指定打印机
-                result = win32api.ShellExecute(0, 'printto', filepath, f'"{printer_name}"', None, 0)
-                if result > 32:
-                    success_count += 1
-                    print(f"✅ 第{i+1}份系统默认PDF打印已发送")
+        if not adobe_found:
+            # 方案2: 使用默认PDF阅读器
+            try:
+                for i in range(copies):
+                    # 使用系统默认PDF阅读器打印
+                    result = win32api.ShellExecute(0, 'print', filepath, None, None, 0)
+                    if result <= 32:
+                        raise Exception(f"ShellExecute失败，错误代码: {result}")
                     time.sleep(3)  # 给应用程序更多时间
-                else:
-                    print(f"❌ printto失败，错误代码: {result}")
-                    
-            if success_count > 0:
-                return True, f"系统默认PDF打印已发送到 {printer_name} ({success_count}/{copies}份)"
-            else:
-                print(f"❌ 系统默认PDF打印失败")
-                
-        except Exception as e:
-            print(f"❌ 系统默认PDF打印异常: {e}")
+                return True, f"默认PDF阅读器打印已发送到 {printer_name} ({copies}份)"
+            except Exception as e:
+                print(f"默认PDF阅读器打印失败: {e}")
         
-        # 方案4: 使用系统printto指定打印机
-        print("🔄 尝试系统默认PDF处理程序...")
-        try:
-            for i in range(copies):
-                # 使用printto指定打印机
-                result = win32api.ShellExecute(0, 'printto', filepath, f'"{printer_name}"', None, 0)
-                if result <= 32:
-                    print(f"printto失败，错误代码: {result}")
-                    raise Exception(f"无法打印到指定打印机 {printer_name}")
-                time.sleep(3)  # 给应用程序更多时间
-            return True, f"系统PDF打印已发送到指定打印机 {printer_name} ({copies}份)"
-        except Exception as e:
-            print(f"系统打印失败: {e}")
-        
-        # 方案5: 使用PowerShell和COM对象，设置正确的打印机
+        # 方案3: 使用PowerShell和COM对象
         try:
             ps_script = f'''
 try {{
     Add-Type -AssemblyName System.Drawing
     Add-Type -AssemblyName System.Windows.Forms
     
-    # 设置指定的打印机
+    # 尝试使用Edge WebView2打印PDF
     $filepath = "{filepath.replace(chr(92), chr(92)+chr(92))}"
     $printer = "{printer_name}"
-    
-    # 尝试使用.NET PrintDocument设置打印机
-    Add-Type -AssemblyName System.Drawing
-    $printDoc = New-Object System.Drawing.Printing.PrintDocument
-    $printDoc.PrinterSettings.PrinterName = $printer
-    
-    # 验证打印机是否可用
-    if (-not $printDoc.PrinterSettings.IsValid) {{
-        Write-Error "指定的打印机不可用: $printer"
-        exit 1
-    }}
-    
-    # 直接使用printto命令
+
     for ($i = 1; $i -le {copies}; $i++) {{
-        $proc = Start-Process -FilePath "powershell" -ArgumentList "-Command", "Start-Process -FilePath '$filepath' -Verb PrintTo -ArgumentList '$printer'" -WindowStyle Hidden -PassThru
-        $proc.WaitForExit(30000)  # 等待30秒
-        Start-Sleep -Seconds 2
+        Start-Process -FilePath $filepath -Verb Print -WindowStyle Hidden
+        Start-Sleep -Seconds 3
     }}
     
-    Write-Output "PDF PowerShell打印完成，发送到: $printer"
+    Write-Output "PDF PowerShell打印完成"
 }} catch {{
     Write-Error "PDF PowerShell打印失败: $_"
     exit 1
@@ -3075,7 +2897,7 @@ try {{
                                   timeout=60)
             
             if result.returncode == 0:
-                return True, f"PDF PowerShell打印已发送到 {printer_name} ({copies}份)"
+                return True, f"PDF PowerShell打印已执行 ({copies}份)"
             else:
                 print(f"PowerShell打印失败: {result.stderr}")
         
@@ -3083,223 +2905,11 @@ try {{
             print(f"PowerShell PDF打印异常: {e}")
         
         # 最终备用方案
-        print("🔄 使用通用备用方案...")
         return print_file_silent_fallback(filepath, printer_name, copies)
         
     except Exception as e:
-        print(f"❌ PDF打印完全失败: {e}")
+        print(f"PDF打印完全失败: {e}")
         return print_file_silent_fallback(filepath, printer_name, copies)
-
-def print_pdf_adobe_com(filepath, printer_name, copies=1):
-    """强化PDF COM打印 - 支持Adobe Acrobat、Reader、WPS PDF"""
-    try:
-        abs_filepath = os.path.abspath(filepath)
-        print(f"🔧 强化PDF COM打印: {abs_filepath}")
-        
-        # 方案1: Adobe Acrobat Professional (最强功能)
-        print("🔸 尝试Adobe Acrobat Professional...")
-        ps_script_acrobat = f'''
-try {{
-    $ErrorActionPreference = "Stop"
-    
-    # 尝试创建Adobe Acrobat COM对象
-    try {{
-        $acrobat = New-Object -ComObject AcroExch.App
-        $avDoc = New-Object -ComObject AcroExch.AVDoc
-        Write-Host "成功创建Adobe COM对象"
-    }} catch {{
-        Write-Host "无法创建Adobe COM对象： $_"
-        exit 1
-    }}
-    
-    # 打开PDF文档
-    $opened = $avDoc.Open("{abs_filepath.replace(chr(92), chr(92)+chr(92))}", "")
-    if (-not $opened) {{
-        Write-Host "无法打开PDF文件"
-        exit 1
-    }}
-    
-    Write-Host "PDF文档打开成功"
-    
-    # 获取PDDoc对象
-    $pdDoc = $avDoc.GetPDDoc()
-    if (-not $pdDoc) {{
-        Write-Host "无法获取PDDoc对象"
-        $avDoc.Close([ref]$true)
-        exit 1
-    }}
-    
-    # 执行静默打印
-    Write-Host "开始静默打印 {copies} 份到打印机: {printer_name}"
-    for ($i = 1; $i -le {copies}; $i++) {{
-        try {{
-            # 使用JSObject执行JavaScript打印命令
-            $jsObj = $pdDoc.GetJSObject()
-            $printParams = @{{
-                bUI = $false
-                bSilent = $true
-                bShrinkToFit = $true
-                printerName = "{printer_name}"
-            }}
-            
-            # 调用JavaScript print方法
-            $jsObj.print($printParams)
-            Write-Host "第${{i}}份打印命令已发送"
-            Start-Sleep -Seconds 1
-        }} catch {{
-            Write-Host "第${{i}}份打印失败： $_"
-        }}
-    }}
-    
-    # 清理资源
-    $avDoc.Close([ref]$true)
-    $acrobat.Exit()
-    
-    # 释放COM对象
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($pdDoc) | Out-Null
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($avDoc) | Out-Null
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($acrobat) | Out-Null
-    [System.GC]::Collect()
-    [System.GC]::WaitForPendingFinalizers()
-    
-    Write-Output "Adobe COM静默打印完成"
-}} catch {{
-    Write-Host "Adobe COM打印失败： $_"
-    exit 1
-}}
-'''
-        
-        
-        # 执行Adobe Acrobat COM
-        try:
-            result = subprocess.run(['powershell', '-WindowStyle', 'Hidden', '-Command', ps_script_acrobat],
-                                  capture_output=True, text=True, timeout=45,
-                                  creationflags=subprocess.CREATE_NO_WINDOW)
-            if result.returncode == 0:
-                print("✅ Adobe Acrobat COM打印成功")
-                return True, f"Adobe Acrobat COM打印完成 ({copies}份)"
-        except Exception as e:
-            print(f"Adobe Acrobat COM异常: {e}")
-        
-        # 方案2: Adobe Reader COM (有限支持)
-        print("🔸 尝试Adobe Reader COM...")
-        ps_script_reader = f'''
-try {{
-    $ErrorActionPreference = "Stop"
-    
-    # 创建Adobe Reader COM对象
-    $reader = New-Object -ComObject AcroRd32.App
-    $reader.Hide()
-    
-    # 打开PDF文档
-    $avDoc = New-Object -ComObject AcroRd32.AVDoc
-    $opened = $avDoc.Open("{abs_filepath.replace(chr(92), chr(92)+chr(92))}", "")
-    if (-not $opened) {{
-        Write-Host "Reader无法打开PDF"
-        exit 1
-    }}
-    
-    # Reader的打印方法（通过菜单执行）
-    for ($i = 1; $i -le {copies}; $i++) {{
-        try {{
-            # 使用Reader的打印接口
-            $avDoc.GetAVPageView().DoGoToPage(0)
-            Start-Sleep -Milliseconds 300
-            
-            # 执行打印菜单命令
-            $avDoc.GetAVPageView().GetAVDoc().GetAVWindow().SetTitle("Printing...")
-            
-            # 尝试调用打印对话框并自动确认
-            Add-Type -AssemblyName System.Windows.Forms
-            [System.Windows.Forms.SendKeys]::SendWait("^p")
-            Start-Sleep -Seconds 1
-            [System.Windows.Forms.SendKeys]::SendWait("{{TAB}}{{TAB}}{{ENTER}}")
-            Start-Sleep -Seconds 2
-            
-            Write-Host "Reader打印第${{i}}份已发送"
-        }} catch {{
-            Write-Host "Reader打印第${{i}}份失败: $_"
-        }}
-    }}
-    
-    $avDoc.Close([ref]$true)
-    $reader.Exit()
-    Write-Output "Adobe Reader打印完成"
-}} catch {{
-    Write-Host "Adobe Reader COM失败: $_"
-    exit 1
-}}
-'''
-        
-        try:
-            result = subprocess.run(['powershell', '-WindowStyle', 'Hidden', '-Command', ps_script_reader],
-                                  capture_output=True, text=True, timeout=60,
-                                  creationflags=subprocess.CREATE_NO_WINDOW)
-            if result.returncode == 0:
-                print("✅ Adobe Reader COM打印成功")
-                return True, f"Adobe Reader COM打印完成 ({copies}份)"
-        except Exception as e:
-            print(f"Adobe Reader COM异常: {e}")
-        
-        # 方案3: WPS PDF COM对象
-        print("🔸 尝试WPS PDF COM...")
-        ps_script_wps = f'''
-try {{
-    $ErrorActionPreference = "Stop"
-    
-    # 尝试创建WPS COM对象
-    $wps = New-Object -ComObject kwps.application
-    $wps.Visible = $false
-    Write-Host "WPS COM对象创建成功"
-    
-    # 打开PDF文档
-    $doc = $wps.Documents.Open("{abs_filepath.replace(chr(92), chr(92)+chr(92))}")
-    Write-Host "WPS打开PDF成功"
-    
-    # 设置打印机
-    try {{
-        $wps.ActivePrinter = "{printer_name}"
-        Write-Host "WPS设置打印机成功"
-    }} catch {{
-        Write-Host "WPS无法设置指定打印机，使用默认"
-    }}
-    
-    # 执行打印
-    for ($i = 1; $i -le {copies}; $i++) {{
-        try {{
-            $doc.PrintOut()
-            Write-Host "WPS PDF打印第${{i}}份完成"
-            Start-Sleep -Seconds 2
-        }} catch {{
-            Write-Host "WPS PDF打印第${{i}}份失败: $_"
-        }}
-    }}
-    
-    $doc.Close([ref]$false)
-    $wps.Quit()
-    Write-Output "WPS PDF打印成功"
-}} catch {{
-    Write-Host "WPS PDF COM失败: $_"
-    exit 1
-}}
-'''
-        
-        try:
-            result = subprocess.run(['powershell', '-WindowStyle', 'Hidden', '-Command', ps_script_wps],
-                                  capture_output=True, text=True, timeout=45,
-                                  creationflags=subprocess.CREATE_NO_WINDOW)
-            if result.returncode == 0:
-                print("✅ WPS PDF COM打印成功")
-                return True, f"WPS PDF COM打印完成 ({copies}份)"
-        except Exception as e:
-            print(f"WPS PDF COM异常: {e}")
-        
-        print("❌ 所有PDF COM方案均失败")
-        return False, "PDF COM对象均不可用"
-        
-    except Exception as e:
-        print(f"❌ PDF COM打印整体异常: {e}")
-        return False, f"PDF COM异常: {str(e)}"
 
 def print_text_file_simple(filepath, printer_name, copies=1):
     """改进的TXT文件打印：支持各种记事本软件创建的文件"""
@@ -3328,12 +2938,12 @@ def print_text_file_simple(filepath, printer_name, copies=1):
             r = win32api.ShellExecute(0, 'printto', filepath, f'"{printer_name}"', None, 0)
             if r > 32:
                 sent += 1
-                time.sleep(2)  # 给更多时间处理
+                time.sleep(1)
             else:
-                print(f"printto到{printer_name}失败，错误代码: {r}")
-                
-        if sent > 0:
-            return True, f"默认程序打印已发送到 {printer_name} ({sent}/{copies}份)"
+                # 回退到普通print
+                r2 = win32api.ShellExecute(0, 'print', filepath, None, None, 0)
+                if r2 > 32:
+                    sent += 1
         
         # 方案3: 尝试WordPad打印 (支持更多编码，但可能有格式)
         if not is_remote_desktop:  # 远程桌面环境下跳过GUI应用
