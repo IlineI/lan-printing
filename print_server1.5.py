@@ -5383,8 +5383,8 @@ def on_clean_logs(icon, item):
         result = messagebox.askyesnocancel(
             "清理日志确认",
             "选择日志清理方式：\n\n"
-            "是(Y) - 按大小清理（保留最新1000条）\n"
-            "否(N) - 按日期清理（删除7天前的记录）\n"
+            "按大小(Y) - 保留最新1000条\n"
+            "按日期(N) - 删除7天前的记录\n"
             "取消 - 不清理"
         )
         
