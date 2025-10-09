@@ -9,6 +9,6 @@
 
 **[1.6版本，找到exe文件下载即可，若运行失败就下载修复工具](https://github.com/a937750307/lan-printing/blob/1.6/)**
 
-**[2.0版本(新增扫描功能，待测试），找到exe文件下载即可，若运行失败就下载修复工具](https://github.com/a937750307/lan-printing/blob/2.0/)**
+**[2.0版本(新增扫描功能），找到exe文件下载即可，若运行失败就下载修复工具](https://github.com/a937750307/lan-printing/blob/2.0/)**
 
 有问题或者建议，可以提交Issues，视情况酌情采纳
