@@ -91,9 +91,6 @@ def add_if_exists(src, dest=None):
 add_if_exists(os.path.join('.', 'uploads'), 'uploads')
 add_if_exists(os.path.join('.', 'scanned_files'), 'scanned_files')
 add_if_exists(os.path.join('.', 'logo.ico'), '.')
-add_if_exists(os.path.join('.', 'README.md'), '.')
-add_if_exists(os.path.join('.', '测试'), '测试')
-add_if_exists(os.path.join('.', 'exe'), 'exe')
 
 # If you have a separate resources folder used by path_manager, try to include it
 add_if_exists(os.path.join('.', 'resources'), 'resources')
