@@ -10,6 +10,8 @@
 
 ## 内网打印及扫描服务（新增扫描功能）
 
+**[2.2版本，找到exe文件下载即可，若运行失败就下载修复工具](https://github.com/a937750307/lan-printing/blob/2.2/)**
+
 **[2.1版本，找到exe文件下载即可，若运行失败就下载修复工具](https://github.com/a937750307/lan-printing/blob/2.1/)**
 
 **[2.0版本，找到exe文件下载即可，若运行失败就下载修复工具](https://github.com/a937750307/lan-printing/blob/2.0/)**
