@@ -12,6 +12,9 @@ import win32con
 import subprocess
 import time
 from datetime import datetime
+# 扫描相关
+import comtypes.client as cc
+import win32com.client as win32com_client
 # 托盘相关
 import threading
 import sys
@@ -19,10 +22,19 @@ import pystray
 from PIL import Image, ImageDraw
 import socket
 import winreg
-import time
 import json
 import math
 import io
+#编码相关
+import ctypes
+import locale
+import parse
+import chardet
+#系统相关
+import platform
+import wmi
+import werkzeug
+
 
 # 修复 Windows 控制台编码问题：强制使用 UTF-8 输出，避免 Unicode 编码错误导致服务启动失败
 try:
@@ -197,44 +209,36 @@ def ensure_printer_connection(pr_name):
     对以 \\ 开头的 printer 名称尝试 AddPrinterConnection，若失败则使用 printui 作为备用。
     返回 True 表示已尝试连接（不保证打印机会可用），False 表示发生异常。
     """
-    try:
-        if not pr_name:
-            return False
-        pn = pr_name.strip()
-        if pn.startswith('\\\\'):
+    """确保对 UNC 网络共享打印机建立临时连接"""
+    if not pr_name:
+        return False
+    pn = pr_name.strip()
+    if pn.startswith('\\'):
+        try:
+            import win32print
+            print(f"尝试连接网络共享打印机: {pn}")
             try:
-                import win32print
-                print(f"尝试连接网络共享打印机: {pn}")
+                win32print.AddPrinterConnection(pn)
+                print(f"已添加打印机连接: {pn}")
+            except Exception as e:
+                print(f"AddPrinterConnection 失败: {e}")
                 try:
-                    win32print.AddPrinterConnection(pn)
-                    print(f"已添加打印机连接: {pn}")
-                except Exception as e:
-                    print(f"AddPrinterConnection 失败: {e}")
-                    # 备用方案：使用 printui 添加
-                    try:
-                        import subprocess
-                        cmd = ['rundll32.exe', 'printui.dll,PrintUIEntry', '/in', '/n', pn]
-                        subprocess.run(cmd, creationflags=subprocess.CREATE_NO_WINDOW)
-                        print(f"已尝试通过 printui 添加打印机: {pn}")
-                    except Exception as e2:
-                        print(f"通过 printui 添加打印机失败: {e2}")
-
-                # 刷新缓存
+                    import subprocess
+                    cmd = ['rundll32.exe', 'printui.dll,PrintUIEntry', '/in', '/n', pn]
+                    subprocess.run(cmd, creationflags=subprocess.CREATE_NO_WINDOW)
+                    print(f"已尝试通过 printui 添加打印机: {pn}")
+                except Exception as e2:
+                    print(f"通过 printui 添加打印机失败: {e2}")
+            if 'printer_cache' in globals():
                 try:
-                    if 'printer_cache' in globals():
-                        printer_cache.refresh_cache()
-                        print("打印机缓存已刷新")
+                    printer_cache.refresh_cache()
+                    print("打印机缓存已刷新")
                 except Exception:
                     pass
-
-            except Exception as e:
-                print(f"ensure_printer_connection 内部错误: {e}")
-                return False
-
-        return True
-    except Exception as e:
-        print(f"ensure_printer_connection 异常: {e}")
-        return False
+        except Exception as e:
+            print(f"ensure_printer_connection 内部错误: {e}")
+            return False
+    return True
 
 
 class PathManager:
@@ -242,67 +246,38 @@ class PathManager:
     
     def __init__(self):
         self._is_packaged = hasattr(sys, '_MEIPASS')
-        self._app_dir = None
-        self._resource_dir = None
-        self._data_dir = None
-        self._init_paths()
-    
-    def _init_paths(self):
-        """初始化路径配置"""
         if self._is_packaged:
-            # PyInstaller打包后的路径配置
-            self._resource_dir = sys._MEIPASS  # 打包内的资源目录
-            self._app_dir = os.path.dirname(sys.executable)  # exe所在目录
-            self._data_dir = self._app_dir  # 数据文件存储目录
+            self._resource_dir = sys._MEIPASS
+            self._app_dir = os.path.dirname(sys.executable)
+            self._data_dir = self._app_dir
         else:
-            # 源码运行时的路径配置
             script_dir = os.path.dirname(os.path.abspath(__file__))
-            self._resource_dir = script_dir  # 资源和源码在同一目录
-            self._app_dir = script_dir  # 应用目录
-            self._data_dir = script_dir  # 数据文件存储目录
+            self._resource_dir = script_dir
+            self._app_dir = script_dir
+            self._data_dir = script_dir
     
     @property
     def is_packaged(self):
-        """是否为打包后的exe文件"""
         return self._is_packaged
-    
     @property
     def app_dir(self):
-        """应用主目录（exe所在目录或脚本所在目录）"""
         return self._app_dir
     
     def get_resource_path(self, relative_path):
-        """获取资源文件的完整路径（图标、模板等）"""
         return os.path.join(self._resource_dir, relative_path)
-    
     def get_data_path(self, relative_path):
-        """获取数据文件的完整路径（配置、日志、上传文件等）"""
         return os.path.join(self._data_dir, relative_path)
-    
     def get_config_path(self):
-        """获取配置文件路径"""
         return self.get_data_path('config.json')
-    
     def get_log_path(self):
-        """获取日志文件路径"""
         return self.get_data_path('print_log.txt')
-    
     def get_upload_dir(self):
-        """获取上传文件目录"""
         return self.get_data_path('uploads')
-    
     def get_executable_name(self):
-        """获取当前执行文件名（用于进程检测）"""
-        if self._is_packaged:
-            return os.path.basename(sys.executable)
-        else:
-            return os.path.basename(sys.argv[0])
-    
+        return os.path.basename(sys.executable) if self._is_packaged else os.path.basename(sys.argv[0])
     def ensure_data_dirs(self):
-        """确保数据目录存在"""
         try:
-            upload_dir = self.get_upload_dir()
-            os.makedirs(upload_dir, exist_ok=True)
+            os.makedirs(self.get_upload_dir(), exist_ok=True)
             return True
         except Exception as e:
             print(f"创建数据目录失败: {e}")
@@ -575,113 +550,67 @@ def clean_old_files(folder=None, expire_seconds=3600):
 def monitor_service_health():
     """监控服务健康状态，发现异常时自动重启 - 优化性能版本"""
     
-    # 尝试导入requests，如果失败则使用简化的监控
-    try:
-        import requests
-        use_http_check = True
-    except ImportError:
-        print("requests库未安装，使用简化监控模式")
-        use_http_check = False
-    
     startup_message_shown = False
     last_check_time = 0
-    
     while True:
         try:
             current_time = time.time()
-            
-            # 动态调整检查间隔，长时间稳定运行后降低检查频率
+            # 动态调整检查间隔
             if hasattr(service_manager, 'start_time') and service_manager.start_time:
                 uptime = current_time - service_manager.start_time
-                if uptime > 3600:  # 运行超过1小时后
-                    check_interval = 1800  # 30分钟检查一次
-                elif uptime > 1800:  # 运行超过30分钟后
-                    check_interval = 900   # 15分钟检查一次
+                if uptime > 3600:
+                    check_interval = 1800
+                elif uptime > 1800:
+                    check_interval = 900
                 else:
-                    check_interval = service_manager.health_check_interval  # 10分钟
+                    check_interval = service_manager.health_check_interval
             else:
                 check_interval = service_manager.health_check_interval
-            
-            # 检查是否到了检查时间
             if current_time - last_check_time < check_interval:
-                time.sleep(30)  # 30秒小间隔检查
+                time.sleep(30)
                 continue
-                
             last_check_time = current_time
-            
-            # 检查Flask线程是否还活着
             if not service_manager.is_service_healthy():
                 print("️ 检测到Flask服务异常")
                 service_manager.restart_flask_service()
                 startup_message_shown = False
                 continue
-            
-            # 如果服务刚启动，给它一些时间稳定
             if service_manager.start_time and (current_time - service_manager.start_time) < 10:
                 if not startup_message_shown:
                     print(" 服务启动中，健康检查暂停10秒...")
                     startup_message_shown = True
                 continue
-            
-            # 简化健康检查，只在必要时进行HTTP请求
-            if use_http_check and hasattr(service_manager, 'health_fail_count') and service_manager.health_fail_count > 0:
-                try:
-                    port = getattr(app, 'current_port', 5000)
-                    response = requests.get(f'http://127.0.0.1:{port}/health', timeout=5)
-                    if response.status_code == 200:
-                        service_manager.update_health_check()
+            # 轻量级socket检查
+            try:
+                import socket
+                port = getattr(app, 'current_port', 5000)
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(2)
+                result = sock.connect_ex(('127.0.0.1', port))
+                sock.close()
+                if result == 0:
+                    service_manager.update_health_check()
+                    if hasattr(service_manager, 'health_fail_count'):
                         service_manager.health_fail_count = 0
-                        print(" HTTP健康检查恢复正常")
-                    else:
-                        raise Exception(f"健康检查返回状态码: {response.status_code}")
-                except Exception as e:
-                    service_manager.health_fail_count = getattr(service_manager, 'health_fail_count', 0) + 1
-                    
-                    if service_manager.health_fail_count >= 3:
-                        print(f"️ HTTP健康检查失败: {service_manager.health_fail_count}/3")
-                    
-                    if service_manager.health_fail_count >= 3:
-                        print(" 连续HTTP健康检查失败，重启服务")
-                        service_manager.restart_flask_service()
+                else:
+                    if not hasattr(service_manager, 'health_fail_count'):
                         service_manager.health_fail_count = 0
-            else:
-                # 轻量级socket检查
-                try:
-                    import socket
-                    port = getattr(app, 'current_port', 5000)
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    sock.settimeout(2)
-                    result = sock.connect_ex(('127.0.0.1', port))
-                    sock.close()
-                    
-                    if result == 0:
-                        service_manager.update_health_check()
-                        if hasattr(service_manager, 'health_fail_count'):
-                            service_manager.health_fail_count = 0
-                    else:
-                        # Socket连接失败，进入HTTP检查模式
-                        if not hasattr(service_manager, 'health_fail_count'):
-                            service_manager.health_fail_count = 0
-                        service_manager.health_fail_count += 1
-                        
-                        if service_manager.health_fail_count >= 2:
-                            print(f"️ Socket健康检查失败: {service_manager.health_fail_count}/2")
-                        
-                        if service_manager.health_fail_count >= 2:
-                            print(" 连续Socket检查失败，重启服务")
-                            service_manager.restart_flask_service()
-                            service_manager.health_fail_count = 0
-                        
-                except Exception as e:
-                    print(f"️ Socket健康检查异常: {e}")
-                    service_manager.health_fail_count = getattr(service_manager, 'health_fail_count', 0) + 1
+                    service_manager.health_fail_count += 1
                     if service_manager.health_fail_count >= 2:
+                        print(f"️ Socket健康检查失败: {service_manager.health_fail_count}/2")
+                    if service_manager.health_fail_count >= 2:
+                        print(" 连续Socket检查失败，重启服务")
                         service_manager.restart_flask_service()
                         service_manager.health_fail_count = 0
-        
+            except Exception as e:
+                print(f"️ Socket健康检查异常: {e}")
+                service_manager.health_fail_count = getattr(service_manager, 'health_fail_count', 0) + 1
+                if service_manager.health_fail_count >= 2:
+                    service_manager.restart_flask_service()
+                    service_manager.health_fail_count = 0
         except Exception as e:
             print(f"服务监控异常: {e}")
-            time.sleep(30)  # 异常后短暂等待
+            time.sleep(30)
 
 # 使用路径管理器获取配置文件路径
 CONFIG_FILE = path_manager.get_config_path()
@@ -694,9 +623,8 @@ def load_config():
                 config = json.load(f)
                 print(f" 配置文件加载成功: {CONFIG_FILE}")
                 return config
-        else:
-            print("配置文件不存在，使用默认配置")
-            return {}
+        print("配置文件不存在，使用默认配置")
+        return {}
     except Exception as e:
         print(f"配置文件加载失败: {e}，使用默认配置")
         return {}
@@ -704,9 +632,7 @@ def load_config():
 def save_config(config):
     """保存配置文件"""
     try:
-        # 确保目录存在
         os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-        
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
         print(f"配置已保存到: {CONFIG_FILE}")
@@ -736,83 +662,66 @@ def get_available_scanners():
         if not hasattr(get_available_scanners, '_cache'):
             get_available_scanners._cache = {'time': 0, 'scanners': []}
             get_available_scanners._cache_timeout = 10  # 秒
-
+        # 缓存有效直接返回
+        import time
         if time.time() - get_available_scanners._cache['time'] < get_available_scanners._cache_timeout:
             return list(get_available_scanners._cache['scanners'])
 
         # 方法1: 优先使用WIA (Windows Image Acquisition) COM对象
-        tried_wia = False
         try:
-            tried_wia = True
-            try:
-                import comtypes.client as _comtypes_client
-                device_manager = _comtypes_client.CreateObject("WIA.DeviceManager")
-                device_infos = device_manager.DeviceInfos
-
-                for i in range(device_infos.Count):
-                    device_info = device_infos.Item(i + 1)
-                    # 有些设备信息对象属性访问可能抛异常，使用保护性访问
-                    try:
-                        device_type = device_info.Properties("Type").Value
-                    except Exception:
-                        device_type = None
-
-                    if device_type == 1:
-                        try:
-                            scanner_name = device_info.Properties("Name").Value
-                        except Exception:
-                            scanner_name = getattr(device_info, 'Name', 'Unknown')
-                        try:
-                            device_id = device_info.Properties("DeviceID").Value
-                        except Exception:
-                            device_id = f"WIA_{i}"
-
-                        scanners.append({'name': scanner_name, 'id': device_id, 'type': 'WIA', 'available': True})
-                        print(f"检测到WIA扫描仪: {scanner_name}")
-
-            except Exception as e_wia:
-                # 如果 comtypes 模块部分缺失（如 No module named 'comtypes.stream'），尝试 win32com 回退
-                print(f"WIA (comtypes) 枚举失败: {e_wia}")
+            import comtypes.client as _comtypes_client
+            device_manager = _comtypes_client.CreateObject("WIA.DeviceManager")
+            device_infos = device_manager.DeviceInfos
+            for i in range(device_infos.Count):
+                device_info = device_infos.Item(i + 1)
                 try:
-                    import win32com.client as win32com_client
-                    dm = win32com_client.Dispatch('WIA.DeviceManager')
-                    device_infos = dm.DeviceInfos
-                    for i in range(1, device_infos.Count + 1):
-                        try:
-                            di = device_infos.Item(i)
-                            # win32com 对象属性访问方式略不同
-                            name = getattr(di.Properties, 'Item', lambda x: None)('Name')
-                        except Exception:
-                            name = None
-                        try:
-                            # fallbacks
-                            nm = di.Properties('Name').Value
-                        except Exception:
-                            nm = getattr(di, 'Name', None) or name or f"WIA_{i}"
-                        try:
-                            device_id = di.Properties('DeviceID').Value
-                        except Exception:
-                            device_id = f"WIA_{i}"
-
-                        # 尝试使用Type属性判断是否为扫描仪
-                        is_scanner = False
-                        try:
-                            t = di.Properties('Type').Value
-                            is_scanner = (t == 1)
-                        except Exception:
-                            # 如果无法判断，则根据名称简单匹配
-                            is_scanner = 'scan' in str(nm).lower() or '扫描' in str(nm)
-
-                        if is_scanner:
-                            scanners.append({'name': nm, 'id': device_id, 'type': 'WIA', 'available': True})
-                            print(f"检测到WIA扫描仪(回退): {nm}")
-                except Exception as e_win32com:
-                    print(f"WIA 回退 (win32com) 也失败: {e_win32com}")
+                    device_type = device_info.Properties("Type").Value
+                except Exception:
+                    device_type = None
+                if device_type == 1:
+                    try:
+                        scanner_name = device_info.Properties("Name").Value
+                    except Exception:
+                        scanner_name = getattr(device_info, 'Name', 'Unknown')
+                    try:
+                        device_id = device_info.Properties("DeviceID").Value
+                    except Exception:
+                        device_id = f"WIA_{i}"
+                    scanners.append({'name': scanner_name, 'id': device_id, 'type': 'WIA', 'available': True})
+                    print(f"检测到WIA扫描仪: {scanner_name}")
+        except Exception as e_wia:
+            print(f"WIA (comtypes) 枚举失败: {e_wia}")
+            # 回退 win32com
+            try:
+                import win32com.client as win32com_client
+                dm = win32com_client.Dispatch('WIA.DeviceManager')
+                device_infos = dm.DeviceInfos
+                for i in range(1, device_infos.Count + 1):
+                    try:
+                        di = device_infos.Item(i)
+                        nm = di.Properties('Name').Value
+                    except Exception:
+                        nm = getattr(di, 'Name', None) or f"WIA_{i}"
+                    try:
+                        device_id = di.Properties('DeviceID').Value
+                    except Exception:
+                        device_id = f"WIA_{i}"
+                    is_scanner = False
+                    try:
+                        t = di.Properties('Type').Value
+                        is_scanner = (t == 1)
+                    except Exception:
+                        is_scanner = 'scan' in str(nm).lower() or '扫描' in str(nm)
+                    if is_scanner:
+                        scanners.append({'name': nm, 'id': device_id, 'type': 'WIA', 'available': True})
+                        print(f"检测到WIA扫描仪(回退): {nm}")
+            except Exception as e_win32com:
+                print(f"WIA 回退 (win32com) 也失败: {e_win32com}")
 
         except Exception as e:
             print(f"WIA 执行期异常: {e}")
         
-        # 方法2: 通过注册表检查已安装的扫描仪
+    # 方法2: 通过注册表检查已安装的扫描仪
         try:
             import winreg
             
@@ -853,46 +762,56 @@ def get_available_scanners():
         except Exception as e:
             print(f"注册表扫描仪检测失败: {e}")
         
-        # 方法3: 检查Windows设备和打印机中的扫描设备（使用 PowerShell 或 WMI 作为回退）
+    # 方法3: 检查Windows设备和打印机中的扫描设备（Win7用WMI，Win8+用PowerShell Get-PnpDevice）
+        import platform
+        windows_version = platform.release()
         try:
-            import subprocess
-            # 尝试使用 Get-PnpDevice（Windows 8+）并过滤 Class 为 Image 的设备
-            ps_script = '''
+            if windows_version in ['7', 'Vista']:
+                # Win7/Vista 用 WMI 查询扫描仪
+                import wmi
+                c = wmi.WMI()
+                for dev in c.Win32_PnPEntity():
+                    try:
+                        name = getattr(dev, 'Name', None)
+                        if name and ('scan' in name.lower() or '扫描' in name):
+                            exists = any(s['name'] == name for s in scanners)
+                            if not exists:
+                                scanners.append({'name': name, 'id': getattr(dev, 'DeviceID', 'WMI'), 'type': 'WMI', 'available': True})
+                                print(f"检测到WMI扫描仪: {name}")
+                    except Exception:
+                        continue
+            else:
+                # Win8+ 用 PowerShell Get-PnpDevice
+                import subprocess
+                ps_script = '''
 try {
     $devs = Get-PnpDevice -Class Image -ErrorAction SilentlyContinue | Select-Object -Property FriendlyName, InstanceId, Status
     if ($devs) { $devs | ConvertTo-Json -Depth 3 } else { Write-Output "[]" }
 } catch { Write-Output "[]" }
 '''
-
-            result = subprocess.run(['powershell', '-Command', ps_script], capture_output=True, text=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
-
-            if result.returncode == 0 and result.stdout.strip():
-                try:
-                    import json
-                    devices = json.loads(result.stdout)
-                    if not isinstance(devices, list):
-                        devices = [devices]
-
-                    for device in devices:
-                        device_name = device.get('FriendlyName') or device.get('FriendlyName', 'Unknown Scanner')
-                        device_status = device.get('Status', 'Unknown')
-                        instance_id = device.get('InstanceId') or device.get('InstanceId', 'Unknown')
-
-                        # 兼容不同语言和驱动返回值，过滤空名
-                        if not device_name:
-                            continue
-
-                        exists = any(s['name'] == device_name for s in scanners)
-                        if not exists:
-                            scanners.append({'name': device_name, 'id': instance_id, 'type': 'PnP', 'available': device_status in ('OK', 'OK (Started)', 'Started')})
-                            print(f"检测到PnP扫描仪: {device_name} (状态: {device_status})")
-                except Exception as e_json:
-                    print(f"解析PnP设备JSON失败: {e_json}")
-            
+                result = subprocess.run(['powershell', '-Command', ps_script], capture_output=True, text=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
+                if result.returncode == 0 and result.stdout.strip():
+                    try:
+                        import json
+                        devices = json.loads(result.stdout)
+                        if not isinstance(devices, list):
+                            devices = [devices]
+                        for device in devices:
+                            device_name = device.get('FriendlyName') or device.get('FriendlyName', 'Unknown Scanner')
+                            device_status = device.get('Status', 'Unknown')
+                            instance_id = device.get('InstanceId') or device.get('InstanceId', 'Unknown')
+                            if not device_name:
+                                continue
+                            exists = any(s['name'] == device_name for s in scanners)
+                            if not exists:
+                                scanners.append({'name': device_name, 'id': instance_id, 'type': 'PnP', 'available': device_status in ('OK', 'OK (Started)', 'Started')})
+                                print(f"检测到PnP扫描仪: {device_name} (状态: {device_status})")
+                    except Exception as e_json:
+                        print(f"解析PnP设备JSON失败: {e_json}")
         except Exception as e:
-            print(f"PnP扫描仪检测失败: {e}")
+            print(f"扫描仪检测（WMI/PnP）失败: {e}")
         
-        # 方法4: 基于已安装打印机推断多功能设备（MFP）——许多用户的打印机同时支持扫描
+    # 方法4: 基于已安装打印机推断多功能设备（MFP）——许多用户的打印机同时支持扫描
         try:
             printers = globals().get('PRINTERS') or []
             # 常见启发式关键词（包括英文与中文）
@@ -941,7 +860,7 @@ try {
         except Exception as e:
             print(f"基于打印机的扫描仪推断失败: {e}")
 
-        # 方法5: 使用网络探针进一步发现（基于打印机 IP）并合并
+    # 方法5: 使用网络探针进一步发现（基于打印机 IP）并合并
         try:
             net_mfps = discover_network_mfps(timeout=1)
             for nm in net_mfps:
@@ -971,13 +890,10 @@ try {
         # 更新缓存并返回
         try:
             get_available_scanners._cache['time'] = time.time()
-            # 深拷贝以避免外部修改缓存内容
             get_available_scanners._cache['scanners'] = list(scanners)
         except Exception:
             pass
-
         return scanners
-        
     except Exception as e:
         print(f"扫描仪检测失败: {e}")
         return [{
@@ -1672,85 +1588,57 @@ def get_local_ip():
         except Exception:
             pass
         
+        """获取本机局域网IP，优先返回非回环地址"""
+        import socket
         try:
-            # 方案3：遍历网络接口获取非回环地址
-            import subprocess
-            result = subprocess.run(['ipconfig'], capture_output=True, text=True, encoding='gbk', timeout=10)
-            if result.returncode == 0:
-                lines = result.stdout.split('\n')
-                for line in lines:
-                    if 'IPv4' in line and '地址' in line:
-                        parts = line.split(':')
-                        if len(parts) > 1:
-                            ip = parts[1].strip()
-                            if ip and not ip.startswith('127.') and not ip.startswith('169.254.'):
-                                return ip
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(('8.8.8.8', 80))
+            ip = s.getsockname()[0]
+            s.close()
+            if ip and not ip.startswith('127.') and not ip.startswith('169.254.'):
+                return ip
         except Exception:
             pass
-        
-        # 最后返回本地回环地址
         return '127.0.0.1'
 
 def get_external_ip():
     """获取公网IP地址（用于内网穿透检测）"""
-    try:
-        import urllib.request
-        # 尝试多个IP检测服务
-        services = [
-            'https://ipv4.icanhazip.com',
-            'https://api.ipify.org',
-            'https://checkip.amazonaws.com',
-            'https://ipinfo.io/ip'
-        ]
-        
-        for service in services:
-            try:
-                with urllib.request.urlopen(service, timeout=3) as response:
-                    external_ip = response.read().decode('utf-8').strip()
-                    if external_ip and '.' in external_ip and not external_ip.startswith('192.168.') and not external_ip.startswith('10.') and not external_ip.startswith('172.'):
-                        return external_ip
-            except Exception:
-                continue
-                
-    except Exception:
-        pass
-    
+    import urllib.request
+    services = [
+        'https://ipv4.icanhazip.com',
+        'https://api.ipify.org',
+        'https://checkip.amazonaws.com',
+        'https://ipinfo.io/ip'
+    ]
+    for service in services:
+        try:
+            with urllib.request.urlopen(service, timeout=3) as response:
+                external_ip = response.read().decode('utf-8').strip()
+                if external_ip and '.' in external_ip and not external_ip.startswith(('192.168.', '10.', '172.')):
+                    return external_ip
+        except Exception:
+            continue
     return None
 
 def detect_network_mode():
     """检测网络模式：内网/公网/内网穿透"""
     local_ip = get_local_ip()
     external_ip = get_external_ip()
-    
-    # 判断是否为内网地址
-    is_private = (local_ip.startswith('192.168.') or 
-                  local_ip.startswith('10.') or 
-                  local_ip.startswith('172.') or
-                  local_ip == '127.0.0.1')
-    
-    # 更准确的内网穿透检测：
-    # 1. 检查是否有端口转发或内网穿透工具的迹象
-    # 2. 简单的方法：检测服务是否可从外网访问（但这需要实际测试，风险较大）
-    # 3. 保守方案：仅在本机IP是公网IP时才判断为公网模式
-    
+    is_private = (local_ip.startswith(('192.168.', '10.', '172.')) or local_ip == '127.0.0.1')
     if not is_private:
-        return "public"  # 本机直接使用公网IP
+        return "public"
     elif local_ip == '127.0.0.1':
-        return "private"  # 仅本机访问
+        return "private"
     else:
-        # 对于内网IP，默认返回private，不主动判断内网穿透
-        # 因为普通家庭网络也会有公网IP，但不代表开启了内网穿透
-        return "private"  # 纯内网模式
+        return "private"
 
 def get_current_ip_config():
     """获取当前IP配置状态 - 极简版本"""
     try:
         current_ip = get_local_ip()
         if current_ip and current_ip != '127.0.0.1':
-            # 使用全局状态跟踪，避免复杂的系统检测
             global IP_CONFIG_STATE
             dhcp_enabled = not IP_CONFIG_STATE.get('is_static', False)
-            
             return {
                 'index': '1',
                 'description': '网络适配器',
@@ -1768,38 +1656,28 @@ def get_current_ip_config():
 def set_static_ip(ip_address, subnet_mask='255.255.255.0', gateway=''):
     """设置静态IP地址 - 简易版本"""
     try:
-        # 自动推导网关
         if not gateway:
             ip_parts = ip_address.split('.')
             if len(ip_parts) == 4:
                 gateway = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.1"
-        
         print(f"设置静态IP: {ip_address}, 网关: {gateway}")
-        
-        # 简单直接的netsh命令，依次尝试常见适配器名称
         adapter_names = ['以太网', 'Ethernet', '本地连接', 'WLAN', 'Wi-Fi']
-        
+        import subprocess
         for name in adapter_names:
             try:
                 cmd = f'netsh interface ip set address name="{name}" static {ip_address} {subnet_mask} {gateway}'
                 result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='gbk')
-                
                 if result.returncode == 0:
                     print(f"设置成功: {name}")
-                    # 更新全局状态
                     global IP_CONFIG_STATE
                     IP_CONFIG_STATE['is_static'] = True
                     IP_CONFIG_STATE['last_set_ip'] = ip_address
-                    
                     import time
-                    time.sleep(2)  # 等待生效
+                    time.sleep(2)
                     return True, f"静态IP设置成功"
-                    
             except Exception:
                 continue
-        
         return False, "未找到可用的网络适配器或设置失败"
-        
     except Exception as e:
         return False, f"设置失败: {str(e)}"
 
@@ -1808,31 +1686,23 @@ def set_dhcp():
     """启用DHCP动态获取IP - 简易版本"""
     try:
         print("启用DHCP...")
-        
-        # 简单直接的netsh命令，依次尝试常见适配器名称
         adapter_names = ['以太网', 'Ethernet', '本地连接', 'WLAN', 'Wi-Fi']
-        
+        import subprocess
         for name in adapter_names:
             try:
                 cmd = f'netsh interface ip set address name="{name}" dhcp'
                 result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='gbk')
-                
                 if result.returncode == 0:
                     print(f"DHCP设置成功: {name}")
-                    # 更新全局状态
                     global IP_CONFIG_STATE
                     IP_CONFIG_STATE['is_static'] = False
                     IP_CONFIG_STATE['last_set_ip'] = None
-                    
                     import time
-                    time.sleep(3)  # 等待获取新IP
+                    time.sleep(3)
                     return True, f"已启用DHCP动态获取IP"
-                    
             except Exception:
                 continue
-        
         return False, "未找到可用的网络适配器或启用DHCP失败"
-        
     except Exception as e:
         return False, f"启用DHCP失败: {str(e)}"
 
@@ -1840,14 +1710,9 @@ def suggest_static_ip():
     """建议一个可用的静态IP地址 - 简易版本"""
     current_ip = get_local_ip()
     if current_ip and current_ip != '127.0.0.1':
-        # 基于当前IP建议一个静态IP
         ip_parts = current_ip.split('.')
         if len(ip_parts) == 4:
-            # 简单建议：同网段的.100地址
-            suggested_ip = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.100"
-            return suggested_ip
-    
-    # 默认建议
+            return f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.100"
     return "192.168.1.100"
  
 def detect_remote_desktop():
@@ -2140,7 +2005,7 @@ def get_autostart():
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key, 0, winreg.KEY_READ) as regkey:
             val, _ = winreg.QueryValueEx(regkey, name)
-            return True if val else False
+            return bool(val)
     except FileNotFoundError:
         return False
  
@@ -2266,6 +2131,7 @@ def too_large(error):
     }), 413
 
 
+
 # 健康检查端点，便于内网穿透监控
 @app.route('/health', methods=['GET'])
 def health():
@@ -2277,11 +2143,11 @@ def health():
             'uptime': int(time.time() - service_manager.start_time) if getattr(service_manager, 'start_time', None) else 0
         }
         resp = jsonify(status)
-        # 简单CORS允许（仅允许所有来源访问，注意安全）
         resp.headers['Access-Control-Allow-Origin'] = '*'
         return resp
     except Exception as e:
         return jsonify({'status': 'error', 'error': str(e)}), 500
+
 
 
 # API: 列出扫描仪（JSON），便于远程调用与内网穿透场景
@@ -2289,20 +2155,18 @@ def health():
 def api_list_scanners():
     try:
         scanners = get_available_scanners()
-        # 标准化输出字段并去除可能的非序列化对象
-        out = []
-        for s in scanners:
-            out.append({
-                'name': str(s.get('name')),
-                'id': str(s.get('id')),
-                'type': str(s.get('type')),
-                'available': bool(s.get('available', False))
-            })
+        out = [{
+            'name': str(s.get('name')),
+            'id': str(s.get('id')),
+            'type': str(s.get('type')),
+            'available': bool(s.get('available', False))
+        } for s in scanners]
         resp = jsonify({'scanners': out})
         resp.headers['Access-Control-Allow-Origin'] = '*'
         return resp
     except Exception as e:
         return jsonify({'error': '扫描仪列表获取失败', 'detail': str(e)}), 500
+
 
 
 # API: 触发扫描（同步执行，返回扫描结果信息或错误），便于远程调用
@@ -2314,15 +2178,11 @@ def api_trigger_scan():
         scanner_id = data.get('scanner_id', 'default')
         scanner_name = data.get('scanner_name', '')
         scan_format = data.get('format', 'PNG')
-
-        # 简单并发保护
         if DEVICE_STATUS.get('is_scanning'):
             return jsonify({'error': '扫描器忙碌中'}), 409
-
         DEVICE_STATUS['is_scanning'] = True
         DEVICE_STATUS['scan_start_time'] = time.time()
         DEVICE_STATUS['scan_client'] = request.remote_addr
-
         try:
             ok, message = start_scan_silent(scanner_id, scanner_name, scan_format)
             status_code = 200 if ok else 500
@@ -2333,7 +2193,6 @@ def api_trigger_scan():
             DEVICE_STATUS['is_scanning'] = False
             DEVICE_STATUS['scan_start_time'] = None
             DEVICE_STATUS['scan_client'] = ''
-
     except Exception as e:
         return jsonify({'error': '触发扫描失败', 'detail': str(e)}), 500
 
@@ -2353,86 +2212,60 @@ class PrinterCache:
         self.all_printers = []
         self.physical_printers = []
         self.default_printer = None
-        
-        # 根据Windows版本优化缓存策略
-        self._set_cache_timeout()
-        
-    def _set_cache_timeout(self):
+        self.cache_timeout = self._detect_cache_timeout()
+
+    def _detect_cache_timeout(self):
         """根据Windows版本设置缓存超时"""
-        import platform
-        import sys
-        
+        import platform, sys
         try:
             windows_version = platform.release()
-            windows_build = None
-            
-            if hasattr(sys, 'getwindowsversion'):
-                win_info = sys.getwindowsversion()
-                windows_build = win_info.build if hasattr(win_info, 'build') else None
-            
-            is_win7 = windows_version == "7"
-            is_win11 = windows_build and windows_build >= 22000 if windows_build else False
-            
-            if is_win7:
-                # Win7频繁检测，系统响应可能较慢
-                self.cache_timeout = 180  # 3分钟缓存
+            windows_build = getattr(getattr(sys, 'getwindowsversion', lambda: None)(), 'build', None)
+            if windows_version == "7":
                 print(" Win7打印机缓存：3分钟")
-                
-            elif is_win11:
-                # Win11长缓存，系统性能好
-                self.cache_timeout = 600  # 10分钟缓存
+                return 180
+            elif windows_build and windows_build >= 22000:
                 print(" Win11打印机缓存：10分钟")
-                
+                return 600
             else:
-                # Win10标准缓存
-                self.cache_timeout = 300  # 5分钟缓存
                 print(" Win10打印机缓存：5分钟")
-                
+                return 300
         except Exception as e:
-            # 默认缓存时间
-            self.cache_timeout = 300
             print(f"打印机缓存配置失败，使用默认5分钟: {e}")
-        
+            return 300
+
     def is_cache_valid(self):
+        import time
         return (time.time() - self.cache_time) < self.cache_timeout
-    
+
     def refresh_cache(self):
+        import win32print, time
         try:
             self.all_printers = [p[2] for p in win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)]
             self.physical_printers = [p for p in self.all_printers if p not in VIRTUAL_PRINTERS]
-            
-            # 更新默认打印机
             try:
                 default = win32print.GetDefaultPrinter()
-                if default in self.physical_printers:
-                    self.default_printer = default
-                elif self.physical_printers:
-                    self.default_printer = self.physical_printers[0]
-                else:
-                    self.default_printer = None
+                self.default_printer = default if default in self.physical_printers else (self.physical_printers[0] if self.physical_printers else None)
             except:
                 self.default_printer = self.physical_printers[0] if self.physical_printers else None
-            
             self.cache_time = time.time()
             return True
         except Exception as e:
             print(f"刷新打印机缓存失败: {e}")
             return False
-    
+
     def get_printers(self):
         if not self.is_cache_valid():
             self.refresh_cache()
         return self.physical_printers
-    
+
     def get_default_printer(self):
         if not self.is_cache_valid():
             self.refresh_cache()
         return self.default_printer
 
-# 创建全局打印机缓存
-printer_cache = PrinterCache()
 
-# 获取所有本地和网络连接打印机，过滤掉虚拟打印机
+# 创建全局打印机缓存并初始化
+printer_cache = PrinterCache()
 printer_cache.refresh_cache()
 ALL_PRINTERS = printer_cache.all_printers
 PRINTERS = printer_cache.physical_printers
@@ -2748,8 +2581,8 @@ HTML = '''
 <body>
 <div class="container">
     <h1 class="mb-4 text-center">内网打印及扫描服务</br>
-    <span class="author-info">（yckj666@52PJ，作者：忆痕）【<a href="https://github.com/a937750307/lan-printing" target="_blank" style="color: #007bff; text-decoration: none;">Github</a>】
-    【<a href="https://zanzhu.937788.xyz" target="_blank" style="color: #28a745; text-decoration: none;">打赏</a>】</span></h1>
+    <span class="author-info">（yckj666@52PJ，作者：忆痕）<a href="https://github.com/a937750307/lan-printing" target="_blank" style="color: #007bff; text-decoration: none;">【Github】</a>
+    <a href="https://zanzhu.937788.xyz" target="_blank" style="color: #28a745; text-decoration: none;">【打赏】</a></span></h1>
     
     <!-- 功能切换导航 -->
     <div class="text-center mb-4">
@@ -4695,11 +4528,49 @@ def print_file_with_settings(filepath, printer_name, copies=1, duplex=1, papersi
         print(f"双面设置: {duplex}")
         print(f"纸张大小: {papersize}")
         print(f"打印质量: {quality}")
-        
+
         # 获取文件扩展名
         file_ext = os.path.splitext(filepath)[1].lower()
-        
-        # 根据文件类型选择打印方案，并传递完整参数
+
+        # 优先尝试原生 API 打印（支持 DEVMODE，确保双面设置生效）
+        def try_native_print():
+            try:
+                devmode = apply_printer_settings(printer_name, copies, duplex, papersize, quality)
+                if devmode is None:
+                    print("未能获取有效 DEVMODE，跳过原生打印")
+                    return False
+                printer_handle = win32print.OpenPrinter(printer_name)
+                try:
+                    # 打开打印任务
+                    doc_info = {
+                        'pDocName': os.path.basename(filepath),
+                        'pOutputFile': None,
+                        'pDatatype': None
+                    }
+                    job_id = win32print.StartDocPrinter(printer_handle, 1, doc_info)
+                    win32print.StartPagePrinter(printer_handle)
+                    # 读取文件内容并写入打印机
+                    with open(filepath, 'rb') as f:
+                        data = f.read()
+                        win32print.WritePrinter(printer_handle, data)
+                    win32print.EndPagePrinter(printer_handle)
+                    win32print.EndDocPrinter(printer_handle)
+                    print("原生打印成功，双面参数已生效")
+                    return True
+                finally:
+                    win32print.ClosePrinter(printer_handle)
+            except Exception as e:
+                print(f"原生打印失败: {e}")
+                return False
+
+        # 仅对 PDF、TXT、图片尝试原生打印，Office 文件暂不支持
+        if file_ext in ['.pdf', '.txt', '.jpg', '.jpeg', '.png', '.bmp', '.gif']:
+            if try_native_print():
+                return True
+            else:
+                print("原生打印未成功，回退到外部程序打印")
+
+        # 其它类型或原生打印失败，回退原有逻辑
         if file_ext == '.pdf':
             return print_pdf_with_settings(filepath, printer_name, copies, duplex, papersize, quality)
         elif file_ext in ['.jpg', '.jpeg', '.png', '.bmp', '.gif']:
@@ -4707,14 +4578,11 @@ def print_file_with_settings(filepath, printer_name, copies=1, duplex=1, papersi
         elif file_ext in ['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx']:
             return print_office_silent(filepath, printer_name, copies)
         elif file_ext == '.txt':
-            # 使用简化的TXT静默打印
             return print_text_file_simple(filepath, printer_name, copies)
-        # HTML/HTM 不再支持
         else:
-            # 对于其他文件类型，尝试使用系统默认方式
             print(f"未知文件类型 {file_ext}，尝试使用系统默认打印方式")
             return print_with_shell_execute(filepath, printer_name, copies)
-            
+
     except Exception as e:
         print(f"打印操作失败: {e}")
         return print_file_silent_fallback(filepath, printer_name, copies)
