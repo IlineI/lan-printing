@@ -92,6 +92,16 @@
 - 失败处理：扫描失败时提供详细错误信息，不会打开系统程序
 - 兼容性提示：如确实安装了扫描仪但检测失败，请在目标电脑上进行扫描操作
 
+## 成品下载地址（网盘下载密码均为：52pj）
+- 1.3版本成品下载链接：https://yichuang.lanzouo.com/b0pn3h9qj
+- 1.4版本成品下载链接：https://yichuang.lanzouo.com/b0pn3h9sb
+- 1.5版本成品下载链接：https://yichuang.lanzouo.com/b0pn3h9tc
+- 1.6版本成品下载链接：https://yichuang.lanzouo.com/b0pn3t9ej
+- 2.0版本成品下载链接：https://yichuang.lanzouo.com/b0pn3vykh
+- 2.1版本成品下载链接：https://yichuang.lanzouo.com/b0pn43q5c（有win7用户反馈闪退）
+- 2.2版本及2.2.1版本成品下载链接：https://yichuang.lanzouo.com/b0pn45mpa（win7用户无法使用）
+- 2.3版本成品下载链接：https://yichuang.lanzouo.com/b0pn74c4b
+
 ## 其他
 - 支持 Win7/Win10/Win11 系统
 - 技术栈：Python 3.7.9 + Flask + Windows API + COM组件 + WIA扫描接口
