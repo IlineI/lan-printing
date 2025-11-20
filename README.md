@@ -98,8 +98,8 @@
 - 1.5版本成品下载链接：https://yichuang.lanzouo.com/b0pn3h9tc
 - 1.6版本成品下载链接：https://yichuang.lanzouo.com/b0pn3t9ej
 - 2.0版本成品下载链接：https://yichuang.lanzouo.com/b0pn3vykh
-- 2.1版本成品下载链接：https://yichuang.lanzouo.com/b0pn43q5c（有win7用户反馈闪退）
-- 2.2版本及2.2.1版本成品下载链接：https://yichuang.lanzouo.com/b0pn45mpa（win7用户无法使用）
+- 2.1版本成品下载链接：https://yichuang.lanzouo.com/b0pn43q5c （有win7用户反馈闪退）
+- 2.2版本及2.2.1版本成品下载链接：https://yichuang.lanzouo.com/b0pn45mpa （win7用户无法使用）
 - 2.3版本成品下载链接：https://yichuang.lanzouo.com/b0pn74c4b
 
 ## 其他
