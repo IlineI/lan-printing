@@ -1,4 +1,4 @@
-![GitHub Card](https://githubcard.com/a937750307.svg)
+[![GitHub Card](https://githubcard.com/a937750307.svg)](https://githubcard.com/a937750307.svg?d=o_0sazjT)
 
 ## 最近更新时间：2025年11月21日
 
