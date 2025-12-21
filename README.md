@@ -1,5 +1,3 @@
-![GitHub Repo Card](https://githubcard.com/a937750307/lan-printing.svg?d=2euhPeQC)
-
 ## 最近更新时间：2025年11月21日
 
 点击下方对应链接，即可跳转
