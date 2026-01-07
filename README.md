@@ -1,6 +1,6 @@
 ![GitHub Repo Card](https://githubcard.com/a937750307/lan-printing.svg?d=ZnhLd79F)
 
-## 最近更新时间：2025年01月08日
+## 最近更新时间：2026年01月08日
 
 ## QQ交流群：1014812705
 
