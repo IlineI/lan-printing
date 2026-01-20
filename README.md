@@ -1,6 +1,6 @@
 ![GitHub Repo Card](https://githubcard.com/a937750307/lan-printing.svg?d=ZnhLd79F)
 
-## 最近更新时间：2026年01月08日
+## 最近更新时间：2026年01月20日
 
 ## QQ交流群：1014812705
 
@@ -12,7 +12,9 @@
 
 ## 内网打印及扫描服务（新增扫描功能）
 
-**[2.4版本，找到exe文件下载即可，若运行失败就下载修复工具](https://github.com/a937750307/lan-printing/blob/2.4/)**    （新版本）
+**[2.5版本，找到exe文件下载即可，若运行失败就下载修复工具](https://github.com/a937750307/lan-printing/blob/2.5/)**    （新版本）
+
+**[2.4版本，找到exe文件下载即可，若运行失败就下载修复工具](https://github.com/a937750307/lan-printing/blob/2.4/)**    
 
 **[2.3版本，找到exe文件下载即可，若运行失败就下载修复工具](https://github.com/a937750307/lan-printing/blob/2.3/)**    
 
