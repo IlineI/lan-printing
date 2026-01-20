@@ -53,6 +53,7 @@
 
 
 ## 使用说明
+### 建议打印的只用打印，扫描的只用扫描
 - 在接打印机的目标电脑上创建一个文件夹，将软件放入（最好win10，电脑名、文件夹和软件名都需是英文）。
 - 右键exe文件，使用管理员权限打开，托盘栏会生成图标，短暂显示控制台弹窗。
 - 控制台5秒后隐藏，5秒内按任意键可保留显示控制台，可通过右键托盘栏图标，控制其显示和隐藏，关闭控制台则会关闭软件。
@@ -117,7 +118,8 @@
 - 2.1版本成品下载链接：https://yichuang.lanzouo.com/b0pn43q5c （有win7用户反馈闪退）
 - 2.2版本及2.2.1版本成品下载链接：https://yichuang.lanzouo.com/b0pn45mpa （win7用户无法使用）
 - 2.3版本成品下载链接：https://yichuang.lanzouo.com/b0pn74c4b
-- 2.5版本成品下载链接：https://yichuang.lanzouv.com/b0pnbjymf
+- 2.4版本成品下载链接：https://yichuang.lanzouv.com/b0pnbjymf
+- 2.5版本成品下载链接：https://yichuang.lanzouv.com/b0pncnyud
 
 ## 其他
 - 支持 Win7/Win10/Win11 系统
