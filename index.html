@@ -191,7 +191,7 @@
             <h2>关于项目</h2>
             <p>本项目是一个内网打印及扫描服务软件，旨在解决因为各种原因（如驱动兼容性、网络问题、系统差异等）导致无法连上共享打印机的困扰。不再依赖繁琐的驱动安装和共享配置，只需在连接打印机的电脑上安装并使用管理员权限运行软件，同一局域网下的其他设备即可通过目标电脑提供的IP端口进入Web界面，轻松访问和使用目标电脑的打印和扫描功能，完全绕过共享打印的各种限制和兼容性问题。</p>
 
-            <p style="margin-top: 20px; color: #ff0000;">如果觉得本项目对你有帮助，请在GitHub仓库给我一个★Star吧！您的支持是我继续维护和开发的动力。</p>
+            <p style="margin-top: 20px; color: #ff0000;">如果觉得本项目对你有帮助，请在GitHub仓库给我一个Star吧！您的支持是我继续维护和开发的动力。</p>
             
             <p style="margin-top: 20px;"><strong style="color: #667eea;">项目地址及相关链接：</strong></p>
             <div style="margin-top: 15px;">
@@ -213,13 +213,18 @@
             
             <div class="versions-container">
                 <div class="version-info" style="background: #d4edda; border-left: 4px solid #28a745;">
-                    <div><strong style="color: #155724;">2.4版本（最新推荐）：</strong> <a href="https://yichuang.lanzouv.com/b0pnbjymf" class="download-link" style="background: #28a745;">下载</a></div>
-                    <div style="margin-top: 5px; color: #155724; font-size: 0.9em;"> Win7/Win10/Win11 完全兼容，版本更新内容：修复并简化扫描功能、若无法静默扫描就弹出扫描窗口、加强了内网穿透模式下的扫描功能、移除系统软件检测、重构并简化Office文件的打印逻辑（已支持Word/Excel/PPT文件打印）、源码第71行增加是否显示虚拟打印机的调试开关</div>
+                    <div><strong style="color: #155724;">2.5版本（最新推荐）：</strong> <a href="https://yichuang.lanzouv.com/b0pncnyud" class="download-link" style="background: #28a745;">下载</a></div>
+                    <div style="margin-top: 5px; color: #155724; font-size: 0.9em;"> 已实现真正的后台静默扫描、大幅提升主流扫描仪的兼容性、修复了VBS扫描脚本在部分系统下的编码乱码问题、扫描前自动清理残留文件、扫描完成后立即释放、WIA设备智能释放、打印状态智能重置、大幅缩短打印超时和扫描超时、扫描完成的文件超过30分钟自动删除并支持手动一键清空、扫描状态消息实时显示在控制台、打印静默化增强</div>
                 </div>
                 
                 <button class="version-toggle" onclick="toggleOldVersions()">查看其他版本</button>
                 
                 <div class="old-versions" id="oldVersions">
+                    <div class="version-info">
+                        <div><strong>2.4版本：</strong> <a href="https://yichuang.lanzouv.com/b0pnbjymf" class="download-link">下载</a></div>
+                        <div style="margin-top: 5px; color: #666;; font-size: 0.9em;"> JPG/PNG无法打印，Win7/Win10/Win11 完全兼容，版本更新内容：修复并简化扫描功能、若无法静默扫描就弹出扫描窗口、加强了内网穿透模式下的扫描功能、移除系统软件检测、重构并简化Office文件的打印逻辑（已支持Word/Excel/PPT文件打印）、源码第71行增加是否显示虚拟打印机的调试开关</div>
+                    </div>
+                    
                     <div class="version-info">
                         <div><strong>2.3版本：</strong> <a href="https://yichuang.lanzouo.com/b0pn45mpa" class="download-link">下载</a></div>
                         <div style="margin-top: 5px; color: #666;; font-size: 0.9em;"> Win7/Win10/Win11 完全兼容，版本更新内容：移除了关于控制台编码的代码、移除了CDN依赖、修复了某些系统下所有的 messagebox 框都无法关闭的问题、添加了控制台对于中文计算机名的检测提示、优化logo图标、优化双面打印功能、统一Flask配置、统一控制台行为</div>
@@ -290,54 +295,69 @@
                 <div class="feature-item"><strong>内网穿透支持</strong>：支持内网、公网、内网穿透模式，兼容各种穿透工具</div>
                 <div class="feature-item"><strong>文件兼容性</strong>：优化UTF-8/GBK/GB2312等编码格式兼容性</div>
                 <div class="feature-item"><strong>Web界面优化</strong>：打印和扫描通过标签页切换，界面简洁直观</div>
-                <div class="feature-item"><strong>打赏支持</strong>：可在经济方面支持一下作者</div>
+                <div class="feature-item"><strong>赞助支持</strong>：可在经济方面支持一下作者</div>
             </div>
         </section>
 
         <!-- 版本更新 -->
         <section>
-            <h2>2.4版本更新内容</h2>
+            <h2>2.5版本更新内容</h2>
             <ul>
-                <li>简化扫描功能，删除大量相关代码，包括复杂的comtypes、注册表、WMI、网络探针等多层方法和所有静默扫描的复杂WIA代码、子进程脚本注入、临时文件管理等。改用通用方案，若无法静默扫描就弹出扫描窗口。</li>
-                <li>加强了内网穿透模式下的扫描功能。</li>
-                <li>删除了容易假检测的系统软件检测功能，删除了Web页里的系统软件状态显示。</li>
-                <li>修正前端JavaScript扫描代码，使其与后端API一致。</li>
-                <li>重构Office文件的打印逻辑，移除Word/Excel/PPT打印的PowerShell强依赖，改用直接的Win32 API或COM调用，简化回退链，共用边距检测和优化函数</li>
-                <li>【print_server2.4.py】文件的第71行代码增加是否显示虚拟打印机的调试开关，Ture是显示所有打印机，False是不显示虚拟打印机，默认为False。</li>
-
+                <li>静默扫描功能重构，改用 WIA 2.0 COM 自动化（VBS + Python 原生调用），实现真正的后台静默扫描，无窗口闪烁，不干扰用户操作。</li>
+                <li>扫描兼容性修复，修复了 WIA 设备连接中的方法错误，大幅提升对 HP、Canon 等主流扫描仪的兼容性。</li>
+                <li>修复了 VBS 扫描脚本在部分系统下的编码乱码问题。</li>
+                <li>扫描前自动清理已存在的同名文件（扫描文件命名规则：scan_年月日_时分秒.格式，示例：scan_20260120_123045.png），以及残留的VBS脚本文件。</li>
+                <li>扫描完成后立即释放，彻底解决重复扫描时设备被锁定的问题，支持多用户连续扫描操作。</li>
+                <li>WIA设备智能释放：整合多层级WIA设备释放策略，包含COM对象释放、句柄清理、服务重启等，彻底解决"设备忙"错误。</li>
+                <li>打印状态智能重置：打印取消或队列清空时，自动重置全局状态标志，确保不阻断后续扫描操作。</li>
+                <li>超快速超时机制：打印状态超时从300秒缩短至30秒（性能提升89%），扫描超时从120秒缩短至60秒（性能提升50%），避免"后台收尾"状态长期占用设备。</li>
+                <li>若扫描仪被锁定，支持自动调用多层级释放策略，确保设备始终可用。实在不行就人工重启扫描仪。</li>
+                <li>扫描完成的文件超过30分钟自动删除，防止占用磁盘空间，用户也可手动点击"清空队列"按钮快速清理所有扫描文件。</li>
+                <li>扫描状态消息（如"设备已释放"、"释放后扫描成功"）实时显示在控制台，便于故障排查和监控。</li>
+                <li>打印静默化增强，PDF 文件优先使用 Chrome/Edge 浏览器控制台静默打印，彻底解决老版本弹窗问题。</li>
+                <li>图片文件使用 Windows 自带画图程序实现静默打印，保证排版一致性。</li>
+                <li>Office 打印逻辑重构，移除对 PowerShell 的依赖，直接调用 Win32 API 或 COM 组件，提升打印速度和成功率。</li>
+                <li>【print_server2.5.py】文件的第71行增加 <code>DEBUG_MODE</code> 开关，可自由切换是否显示虚拟打印机。</li>
             </ul>
         </section>
 
         <!-- 使用说明 -->
         <section>
             <h2>使用说明</h2>
+            <p style="background: #fff3cd; padding: 15px; border-radius: 4px; margin-bottom: 20px; color: #856404;"><strong> 建议：</strong>建议打印的只用打印，扫描的只用扫描</p>
             <ol>
-                <li>在接打印机的目标电脑上创建文件夹，将软件放入（建议Win10，电脑名、文件夹和软件名都需是英文）</li>
-                <li>右键exe文件，用管理员权限打开，托盘栏会生成图标，短暂显示控制台弹窗</li>
-                <li>控制台5秒后隐藏，5秒内按任意键可保留显示控制台，可通过右键托盘栏图标控制其显示和隐藏</li>
-                <li>右键托盘栏图标，查看IP端口，其他设备在浏览器输入该IP端口进入可视化网页</li>
-                <li>可安装二维码生成插件，做成二维码分发给局域网的其他人使用</li>
-                <li>其他设备通过IP端口访问网页后，通过【打印】和【扫描】标签页切换功能：
+                <li>在接打印机的目标电脑上创建文件夹，将软件放入（最好win10，电脑名、文件夹和软件名都需是英文）</li>
+                <li>右键exe文件，使用管理员权限打开，托盘栏会生成图标，短暂显示控制台弹窗</li>
+                <li>控制台5秒后隐藏，5秒内按任意键可保留显示控制台，可通过右键托盘栏图标，控制其显示和隐藏，关闭控制台则会关闭软件</li>
+                <li>右键托盘栏图标，会展示IP端口，其他设备在浏览器地址栏输入该IP端口即可进入可视化网页，从而进行打印或扫描操作</li>
+                <li>右键托盘栏图标，可安装二维码生成插件，做成二维码分发给局域网的其他人使用</li>
+                <li>其他设备通过该IP端口访问网页后，通过【打印】和【扫描】标签页切换功能：
                     <ul style="margin-top: 10px;">
-                        <li><strong>打印功能</strong>：选择/拖拽文件上传，设置打印参数后提交</li>
-                        <li><strong>扫描功能</strong>：选择扫描仪，设置扫描格式，点击扫描按钮</li>
+                        <li><strong>打印功能</strong>：选择/拖拽文件上传，设置打印参数后提交即可</li>
+                        <li><strong>扫描功能</strong>：选择扫描仪，设置扫描格式，点击扫描按钮即可</li>
                     </ul>
                 </li>
                 <li>上传后可在队列中删除未打印的文件，随时取消</li>
-                <li>扫描完成的文件可直接预览、下载或重新打印</li>
-                <li>网络相关设置请在托盘菜单【网络配置】中操作（需要管理员权限）</li>
+                <li>扫描完成的文件可直接预览、下载或重新打印，支持点击"清空队列"按钮一键清空所有扫描文件（超过30分钟的扫描文件也会自动删除）</li>
+                <li>扫描仪被锁定时，可点击"释放设备"按钮强制释放扫描仪，无需重启目标电脑或手动清理</li>
+                <li>所有操作均有提示，界面直观，无需额外说明</li>
+                <li>扫描和打印操作会自动避免设备冲突</li>
+                <li>网络相关设置请在托盘菜单【网络配置】中操作（必须管理员权限）</li>
                 <li>支持静态IP设置：选择"设置当前IP为静态"可固定当前IP地址</li>
+                <li>智能打印优化：程序会自动优化文档边距，无需手动调整</li>
+                <li>日志自动维护，无需手动清理</li>
+                <li>控制台自动维护，无需手动清理</li>
             </ol>
         </section>
 
         <!-- 修复工具 -->
         <section>
             <h2>修复工具 2.3版本</h2>
-            <p>若 <code>print_server2.3.exe</code> 运行报错，可使用对应系统的修复工具：</p>
+            <p>若 <code>print_server2.5.exe</code> 运行报错，可使用对应系统的修复工具：</p>
             <ul>
-                <li><code>win7_fix_tool_2.3.py</code> - Windows 7 专用修复工具（支持打印及扫描环境检测）</li>
-                <li><code>win10_fix_tool_2.3.py</code> - Windows 10 专用修复工具（支持打印及扫描环境检测）</li>
-                <li><code>win11_fix_tool_2.3.py</code> - Windows 11 专用修复工具（支持打印及扫描环境检测）</li>
+                <li><code>win7_fix_tool_2.3.py</code> - Windows 7 专用修复工具（支持打印及扫描环境检测，2.3版优化）</li>
+                <li><code>win10_fix_tool_2.3.py</code> - Windows 10 专用修复工具（支持打印及扫描环境检测，2.3版优化）</li>
+                <li><code>win11_fix_tool_2.3.py</code> - Windows 11 专用修复工具（支持打印及扫描环境检测，2.3版优化）</li>
             </ul>
         </section>
 
