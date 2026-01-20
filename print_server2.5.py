@@ -684,6 +684,88 @@ def get_available_scanners():
             'available': True
         }]
 
+def cleanup_port_and_restart_wia(port=5000):
+    """强制清理端口占用标记并重启WIA服务"""
+    try:
+        print(f"[CLEANUP] 开始清理端口占用和重启WIA服务...")
+        
+        # 步骤1: 强制关闭占用指定端口的进程
+        try:
+            print(f"[PORT] 尝试清理端口 {port}...")
+            result = subprocess.run(
+                ['netstat', '-ano'],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if f':{port}' in line and 'ESTABLISHED' in line:
+                        parts = line.split()
+                        if len(parts) > 0:
+                            try:
+                                pid = parts[-1]
+                                subprocess.run(
+                                    ['taskkill', '/F', '/PID', pid],
+                                    capture_output=True,
+                                    timeout=5,
+                                    creationflags=subprocess.CREATE_NO_WINDOW
+                                )
+                                print(f"[PORT] 已清理占用端口 {port} 的进程 (PID: {pid})")
+                            except:
+                                pass
+        except Exception as e:
+            print(f"[WARN] 端口清理异常: {e}")
+        
+        # 步骤2: 强制清理socket状态
+        try:
+            print("[CLEANUP] 清理socket挂起状态...")
+            import gc
+            gc.collect()
+            print("[CLEANUP] Socket状态已清空")
+        except:
+            pass
+        
+        # 步骤3: 停止WIA服务
+        try:
+            print("[WIA] 停止WIA服务...")
+            result = subprocess.run(
+                ['sc', 'stop', 'wiaservc'],
+                capture_output=True,
+                timeout=10,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            if result.returncode == 0:
+                print("[WIA] WIA服务已停止")
+                import time
+                time.sleep(1)
+        except Exception as e:
+            print(f"[WARN] 停止WIA服务异常: {e}")
+        
+        # 步骤4: 启动WIA服务
+        try:
+            print("[WIA] 启动WIA服务...")
+            result = subprocess.run(
+                ['sc', 'start', 'wiaservc'],
+                capture_output=True,
+                timeout=10,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            if result.returncode == 0:
+                print("[WIA] WIA服务已启动")
+                return True
+        except Exception as e:
+            print(f"[WARN] 启动WIA服务异常: {e}")
+        
+        print("[SUCCESS] 端口和WIA服务清理完成")
+        return True
+        
+    except Exception as e:
+        print(f"[ERROR] 清理端口和重启WIA失败: {e}")
+        return False
+
 def force_release_wia_device():
     """强制释放被锁定的WIA设备"""
     import subprocess
@@ -1151,49 +1233,6 @@ WScript.Quit 0
             # 扫描失败
             restore_auto_open_folder()
             return False, "扫描执行失败。请确保扫描仪已连接。"
-            
-            # 以下代码不会被执行（因为上面已经return了）
-            print("等待扫描文件产生（最多60秒）...")
-            start_wait = time.time()
-            max_wait = 60
-            
-            while time.time() - start_wait < max_wait:
-                time.sleep(2)
-                try:
-                    current_files = set(os.listdir(scan_path)) if os.path.exists(scan_path) else set()
-                    new_files = current_files - initial_files
-                    valid_new_files = [f for f in new_files if not f.startswith('~') and not f.startswith('.')]
-                    
-                    if valid_new_files:
-                        newest_file = max([os.path.join(scan_path, f) for f in valid_new_files],
-                                        key=os.path.getctime)
-                        newest_name = os.path.basename(newest_file)
-                        file_size = os.path.getsize(newest_file)
-                        print(f"扫描完成: {newest_name} ({file_size} 字节)")
-                        restore_auto_open_folder()
-                        return True, f"扫描成功！文件已保存到: {newest_name}"
-                except:
-                    pass
-            
-            # 超时后再检查一次
-            try:
-                current_files = set(os.listdir(scan_path)) if os.path.exists(scan_path) else set()
-                new_files = current_files - initial_files
-                valid_new_files = [f for f in new_files if not f.startswith('~') and not f.startswith('.')]
-                
-                if valid_new_files:
-                    newest_file = max([os.path.join(scan_path, f) for f in valid_new_files],
-                                    key=os.path.getctime)
-                    newest_name = os.path.basename(newest_file)
-                    file_size = os.path.getsize(newest_file)
-                    print(f"✓ 扫描完成: {newest_name} ({file_size} 字节)")
-                    restore_auto_open_folder()
-                    return True, f"扫描成功！文件已保存到: {newest_name}"
-            except:
-                pass
-            
-            restore_auto_open_folder()
-            return False, "未检测到扫描文件产生。请确保扫描仪已连接并在扫描仪上按下扫描按钮。"
         
         except Exception as e:
             print(f"扫描异常: {e}")
@@ -1503,10 +1542,13 @@ def cancel_print_jobs_by_document(document_name, printer_name=None, cancel_activ
         printer_name: 指定打印机名称，为None则搜索所有打印机
         cancel_active: 是否取消正在打印的任务（默认False）
     """
+    global DEVICE_STATUS
+    
     try:
         import win32print
         cancelled_jobs = []
         skipped_jobs = []
+        has_cancelled_any = False
         
         # 获取打印队列任务
         jobs = get_print_queue_jobs(printer_name)
@@ -1525,7 +1567,7 @@ def cancel_print_jobs_by_document(document_name, printer_name=None, cancel_activ
                 
                 # 检查任务是否可取消
                 if not is_cancellable:
-                    print(f"️ 跳过任务 {job['document']}: 任务已完成或正在删除")
+                    print(f"[SKIP] 跳过任务 {job['document']}: 任务已完成或正在删除")
                     skipped_jobs.append({
                         'job_id': job['job_id'],
                         'printer': job['printer'],
@@ -1537,7 +1579,7 @@ def cancel_print_jobs_by_document(document_name, printer_name=None, cancel_activ
                 
                 # 检查是否正在打印
                 if is_printing and not cancel_active:
-                    print(f"️ 跳过正在打印的任务: {job['document']} (状态: {status_desc})")
+                    print(f"[SKIP] 跳过正在打印的任务: {job['document']} (状态: {status_desc})")
                     print(f"    提示: 如需强制取消正在打印的任务，请使用带参数的API")
                     skipped_jobs.append({
                         'job_id': job['job_id'],
@@ -1568,6 +1610,7 @@ def cancel_print_jobs_by_document(document_name, printer_name=None, cancel_activ
                     print(f" {action}打印任务: {job['document']} (任务ID: {job['job_id']}, 状态: {status_desc})")
                     
                     win32print.ClosePrinter(printer_handle)
+                    has_cancelled_any = True
                     
                 except Exception as e:
                     print(f" 取消打印任务失败: {job['document']} - {e}")
@@ -1578,6 +1621,28 @@ def cancel_print_jobs_by_document(document_name, printer_name=None, cancel_activ
                         'reason': f'取消失败: {e}',
                         'status': status_desc
                     })
+        
+        # 如果成功取消了任何打印任务，重置全局打印状态并释放WIA设备
+        if has_cancelled_any and DEVICE_STATUS['is_printing']:
+            print("[RESET] 重置打印设备状态（已取消打印任务）")
+            DEVICE_STATUS['is_printing'] = False
+            DEVICE_STATUS['print_start_time'] = None
+            DEVICE_STATUS['print_client'] = ''
+            
+            # 强制清理端口占用和重启WIA服务
+            print("[CLEANUP] 强制清理后台占用资源...")
+            try:
+                port = getattr(app, 'current_port', 5000)
+                cleanup_port_and_restart_wia(port)
+            except Exception as e:
+                print(f"[WARN] 端口清理异常（非致命）: {e}")
+            
+            # 自动释放WIA设备，避免与扫描冲突
+            print("[INFO] 释放WIA扫描设备以避免冲突...")
+            try:
+                force_release_wia_device()
+            except Exception as e:
+                print(f"[WARN] WIA设备释放异常（非致命）: {e}")
         
         return {
             'cancelled': cancelled_jobs,
@@ -1596,6 +1661,8 @@ def cancel_print_jobs_by_document(document_name, printer_name=None, cancel_activ
 
 def clear_all_print_queues():
     """清空所有打印机的打印队列"""
+    global DEVICE_STATUS
+    
     try:
         import win32print
         cleared_count = 0
@@ -1620,6 +1687,28 @@ def clear_all_print_queues():
                 
             except Exception as e:
                 print(f"清理打印机 {printer} 队列失败: {e}")
+        
+        # 如果成功清空了任何打印任务，重置全局打印状态并释放WIA设备
+        if cleared_count > 0 and DEVICE_STATUS['is_printing']:
+            print("[RESET] 重置打印设备状态（已清空所有打印队列）")
+            DEVICE_STATUS['is_printing'] = False
+            DEVICE_STATUS['print_start_time'] = None
+            DEVICE_STATUS['print_client'] = ''
+            
+            # 强制清理端口占用和重启WIA服务
+            print("[CLEANUP] 强制清理后台占用资源...")
+            try:
+                port = getattr(app, 'current_port', 5000)
+                cleanup_port_and_restart_wia(port)
+            except Exception as e:
+                print(f"[WARN] 端口清理异常（非致命）: {e}")
+            
+            # 自动释放WIA设备，避免与扫描冲突
+            print("[INFO] 释放WIA扫描设备以避免冲突...")
+            try:
+                force_release_wia_device()
+            except Exception as e:
+                print(f"[WARN] WIA设备释放异常（非致命）: {e}")
         
         return cleared_count
         
@@ -1846,6 +1935,8 @@ def api_list_scanners():
 @app.route('/api/release_scanner', methods=['POST', 'OPTIONS'])
 def api_release_scanner():
     """强制释放被锁定的扫描仪设备"""
+    global DEVICE_STATUS
+    
     if request.method == 'OPTIONS':
         resp = app.make_default_options_response()
         resp.headers['Access-Control-Allow-Origin'] = '*'
@@ -1855,10 +1946,26 @@ def api_release_scanner():
     
     try:
         print("执行强制释放扫描仪设备...")
+        
+        # 强制清理端口占用和重启WIA服务
+        print("[CLEANUP] 强制清理后台占用资源...")
+        try:
+            port = getattr(app, 'current_port', 5000)
+            cleanup_port_and_restart_wia(port)
+        except Exception as e:
+            print(f"[WARN] 端口清理异常（非致命）: {e}")
+        
         success = force_release_wia_device()
         
+        # 同时重置扫描状态
+        if DEVICE_STATUS['is_scanning']:
+            print("重置扫描设备状态")
+            DEVICE_STATUS['is_scanning'] = False
+            DEVICE_STATUS['scan_start_time'] = None
+            DEVICE_STATUS['scan_client'] = ''
+        
         if success:
-            print("✓ 扫描仪设备已成功释放")
+            print("[SUCCESS] 扫描仪设备已成功释放")
             return jsonify({
                 'status': 'success',
                 'message': '扫描仪设备已成功释放，请稍候后重试扫描',
@@ -1983,10 +2090,21 @@ def api_trigger_scan():
             DEVICE_STATUS['scan_client'] = ''
     
     except Exception as e:
+        error_msg = str(e)
+        
+        # 检测是否是WIA设备被占用的错误
+        if 'WIA' in error_msg or 'busy' in error_msg.lower() or 'occupy' in error_msg.lower():
+            print(f"[ERROR] 检测到WIA设备被占用错误，尝试自动释放: {error_msg}")
+            try:
+                force_release_wia_device()
+                error_msg += "\n(已尝试自动释放设备，请重试)"
+            except Exception as release_error:
+                print(f"[WARN] 自动释放WIA设备失败: {release_error}")
+        
         return jsonify({
             'status': 'error',
             'error': '触发扫描失败',
-            'detail': str(e),
+            'detail': error_msg,
             'client_ip': request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or request.remote_addr
         }), 500
 
@@ -7026,7 +7144,7 @@ def delete_file_api():
             if cancelled_count > 0:
                 print(f" 已取消 {cancelled_count} 个打印任务")
             if skipped_count > 0:
-                print(f"️ 跳过 {skipped_count} 个任务（正在打印或已完成）")
+                print(f"[SKIP] 跳过 {skipped_count} 个任务（正在打印或已完成）")
             if cancel_result['total_found'] == 0:
                 print(f" 未找到相关的打印任务")
                 
@@ -7186,17 +7304,17 @@ def get_device_status():
     
     current_time = time.time()
     
-    # 检查超时状态并自动重置
+    # 检查超时状态并自动重置 - 打印极短超时（30秒）
     if DEVICE_STATUS['is_printing'] and DEVICE_STATUS['print_start_time']:
-        if current_time - DEVICE_STATUS['print_start_time'] > 300:  # 5分钟超时
-            print("️ 打印任务超时，重置状态")
+        if current_time - DEVICE_STATUS['print_start_time'] > 30:  # 30秒超时
+            print("[TIMEOUT] 打印任务超时（30秒），重置状态")
             DEVICE_STATUS['is_printing'] = False
             DEVICE_STATUS['print_start_time'] = None
             DEVICE_STATUS['print_client'] = ''
     
     if DEVICE_STATUS['is_scanning'] and DEVICE_STATUS['scan_start_time']:
-        if current_time - DEVICE_STATUS['scan_start_time'] > 120:  # 2分钟超时
-            print("️ 扫描任务超时，重置状态")
+        if current_time - DEVICE_STATUS['scan_start_time'] > 60:  # 60秒超时
+            print("[TIMEOUT] 扫描任务超时（60秒），重置状态")
             DEVICE_STATUS['is_scanning'] = False
             DEVICE_STATUS['scan_start_time'] = None
             DEVICE_STATUS['scan_client'] = ''
@@ -7522,6 +7640,8 @@ def get_print_queue_api():
 @app.route('/api/clear_print_queue', methods=['POST'])
 def clear_print_queue_api():
     """API端点：清空打印队列"""
+    global DEVICE_STATUS
+    
     try:
         data = request.get_json() or {}
         printer_name = data.get('printer')
@@ -7545,6 +7665,28 @@ def clear_print_queue_api():
             # 清空所有打印机的队列
             cleared_count = clear_all_print_queues()
             message = f'已清空所有打印机的 {cleared_count} 个任务'
+        
+        # 如果成功清空了任何打印任务，重置全局打印状态并释放WIA设备
+        if cleared_count > 0 and DEVICE_STATUS['is_printing']:
+            print("[RESET] 重置打印设备状态（API清空打印队列）")
+            DEVICE_STATUS['is_printing'] = False
+            DEVICE_STATUS['print_start_time'] = None
+            DEVICE_STATUS['print_client'] = ''
+            
+            # 强制清理端口占用和重启WIA服务
+            print("[CLEANUP] 强制清理后台占用资源...")
+            try:
+                port = getattr(app, 'current_port', 5000)
+                cleanup_port_and_restart_wia(port)
+            except Exception as e:
+                print(f"[WARN] 端口清理异常（非致命）: {e}")
+            
+            # 自动释放WIA设备，避免与扫描冲突
+            print("[INFO] 释放WIA扫描设备以避免冲突...")
+            try:
+                force_release_wia_device()
+            except Exception as e:
+                print(f"[WARN] WIA设备释放异常（非致命）: {e}")
         
         # 记录日志
         client_ip = request.remote_addr or '未知IP'
