@@ -1,4 +1,4 @@
-# 内网打印及扫描服务 2.5版本
+# 内网打印及扫描服务 2.5.1版本
 - 使用 Python3.7.9 编程和打包，兼容性更好
 - 拥有内网打印及扫描功能
 
@@ -34,22 +34,10 @@
 - 【赞助】：可在经济方面支持一下作者（你的支持就是我的动力）
 - 【版本升级】：新增版本升级页面，内含软件介绍和使用方法
 
-## 2.5版本更新内容
--  静默扫描功能重构，改用 WIA 2.0 COM 自动化（VBS + Python 原生调用），实现真正的后台静默扫描，无窗口闪烁，不干扰用户操作。
--  扫描兼容性修复，修复了 WIA 设备连接中的方法错误，大幅提升对 HP、Canon 等主流扫描仪的兼容性。
--  修复了 VBS 扫描脚本在部分系统下的编码乱码问题。
--  扫描前自动清理已存在的同名文件（扫描文件命名规则：scan_年月日_时分秒.格式，示例：scan_20260120_123045.png），以及残留的VBS脚本文件。
--  扫描完成后立即释放，彻底解决重复扫描时设备被锁定的问题，支持多用户连续扫描操作。
--  WIA设备智能释放：整合多层级WIA设备释放策略，包含COM对象释放、句柄清理、服务重启等，彻底解决"设备忙"错误。
--  打印状态智能重置：打印取消或队列清空时，自动重置全局状态标志，确保不阻断后续扫描操作。
--  超快速超时机制：打印状态超时从300秒缩短至30秒（性能提升89%），扫描超时从120秒缩短至60秒（性能提升50%），避免"后台收尾"状态长期占用设备。
--  若扫描仪被锁定，支持自动调用多层级释放策略，确保设备始终可用。实在不行就人工重启扫描仪。
--  扫描完成的文件超过30分钟自动删除，防止占用磁盘空间，用户也可手动点击"清空队列"按钮快速清理所有扫描文件。
--  扫描状态消息（如"设备已释放"、"释放后扫描成功"）实时显示在控制台，便于故障排查和监控。
--  打印静默化增强，PDF 文件优先使用 Chrome/Edge 浏览器控制台静默打印，彻底解决老版本弹窗问题。
--  图片文件使用 Windows 自带画图程序实现静默打印，保证排版一致性。
--  Office 打印逻辑重构，移除对 PowerShell 的依赖，直接调用 Win32 API 或 COM 组件，提升打印速度和成功率。
-- 【print_server2.5.py】文件的第71行增加 `DEBUG_MODE` 开关，可自由切换是否显示虚拟打印机。
+## 2.5.1版本更新内容
+-  修正扫描管理文件区域的路径不一致问题
+-  新增启动时的控制台提示，明确提示程序运行在托盘栏里，可右键程序图标，获取IP端口信息
+-  取消扫描后导出为PDF格式，仅限导出为PNG和JPEG格式
 
 
 ## 使用说明
@@ -74,7 +62,7 @@
 - 控制台自动维护，无需手动清理。
 
 ## 修复工具 2.3版本
-  - 若 `print_server2.5.exe` 运行报错，可使用对应系统的修复工具
+  - 若 `print_server2.5.1.exe` 运行报错，可使用对应系统的修复工具
   - `win7_fix_tool_2.3.py` - Windows 7 专用修复工具（支持打印及扫描环境检测，2.3版优化）
   - `win10_fix_tool_2.3.py` - Windows 10 专用修复工具（支持打印及扫描环境检测，2.3版优化）
   - `win11_fix_tool_2.3.py` - Windows 11 专用修复工具（支持打印及扫描环境检测，2.3版优化）
@@ -119,7 +107,7 @@
 - 2.2版本及2.2.1版本成品下载链接：https://yichuang.lanzouo.com/b0pn45mpa （win7用户无法使用）
 - 2.3版本成品下载链接：https://yichuang.lanzouo.com/b0pn74c4b
 - 2.4版本成品下载链接：https://yichuang.lanzouv.com/b0pnbjymf
-- 2.5版本成品下载链接：https://yichuang.lanzouv.com/b0pncnyud
+- 2.5.1版本成品下载链接：https://yichuang.lanzouv.com/b0pncnyud
 
 ## 其他
 - 支持 Win7/Win10/Win11 系统
@@ -131,7 +119,7 @@
 - pip install flask flask_cors werkzeug requests requests_toolbelt pysnmp pystray pillow comtypes pywin32 wmi waitress certifi chardet win32print win32api win32com ctypes winreg pystray pillow PIL Pillow
 - 建议在打包前先执行上述命令，确保所有依赖齐全。
 - 打包建议使用 PyInstaller 5.x 及以上版本，推荐命令：
-  pyinstaller --clean --noconfirm print_server2.5.spec
+  pyinstaller --clean --noconfirm print_server2.5.1.spec
 - 如需自定义依赖或资源，请编辑 .spec 文件的 hiddenimports 和 datas 部分。
 
 ## 【常见问题/解决方案】
