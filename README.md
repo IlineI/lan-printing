@@ -1,6 +1,6 @@
 ![GitHub Repo Card](https://githubcard.com/a937750307/lan-printing.svg?d=ZnhLd79F)
 
-## 最近更新时间：2026年03月31日
+## 最近更新时间：2026年04月11日
 
 ## 软件介绍及下载地址：https://print.937788.xyz/
 
@@ -14,7 +14,7 @@
 
 ## 内网打印及扫描服务（新增扫描功能）
 
-**[2.5.1版本，找到exe文件下载即可，若运行失败就下载修复工具](https://github.com/a937750307/lan-printing/tree/2.5.1/)**    （新版本）
+**[2.5.2版本，找到exe文件下载即可，若运行失败就下载修复工具](https://github.com/a937750307/lan-printing/tree/2.5.2/)**    （新版本）
 
 **[2.5版本，找到exe文件下载即可，若运行失败就下载修复工具](https://github.com/a937750307/lan-printing/tree/2.5/)** 
 
@@ -43,5 +43,7 @@
 有问题或者建议，可以提交Issues，视情况酌情采纳
 
 如果打赏作者，可优先考虑是否采纳（记得私信我）  **[好活当赏！](https://zanzhu.937788.xyz/)**
+
+## 更多工具尽在忆痕·发布页：https://www.937788.xyz/
 
 

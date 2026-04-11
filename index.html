@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>内网打印及扫描服务-by忆痕</title>
+    <title>内网打印及扫描服务 2.5.2版本-by忆痕</title>
+    <link rel="icon" href="logo.ico" type="image/x-icon">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * {
@@ -96,6 +97,35 @@
             padding: 15px;
             border-radius: 4px;
             margin: 10px 0;
+        }
+
+        .collapsed-section {
+            margin-top: 20px;
+            border: 1px solid #e8e8e8;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        .collapsed-header {
+            width: 100%;
+            border: none;
+            background: #f8faff;
+            color: #667eea;
+            padding: 14px 18px;
+            font-size: 1rem;
+            font-weight: 700;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .collapsed-content {
+            display: none;
+            padding: 0 18px 18px;
+        }
+
+        .collapsed-content.show {
+            display: block;
         }
         
         .download-link {
@@ -216,13 +246,17 @@
             
             <div class="versions-container">
                 <div class="version-info" style="background: #d4edda; border-left: 4px solid #28a745;">
-                    <div><strong style="color: #155724;">2.5.1版本（最新推荐）：</strong> <a href="https://yichuang.lanzouv.com/b0pncnyud" class="download-link" style="background: #28a745;">下载</a></div>
-                    <div style="margin-top: 5px; color: #155724; font-size: 0.9em;"> 修正扫描管理文件区域的路径不一致问题、新增启动时的控制台提示，明确提示程序运行在托盘栏里，可右键程序图标，获取IP端口信息、取消扫描后导出为PDF格式，仅限导出为PNG和JPEG格式</div>
+                    <div><strong style="color: #155724;">2.5.2版本（最新推荐）：</strong> <a href="https://yichuang.lanzouv.com/b0pncnyud" class="download-link" style="background: #28a745;">下载</a></div>
+                    <div style="margin-top: 5px; color: #155724; font-size: 0.9em;"> 美化了页面布局，更美观、logo图标改成白色透明、说明区支持展开/收纳，并自动记忆状态、打印份数支持自定义参数</div>
                 </div>
                 
                 <button class="version-toggle" onclick="toggleOldVersions()">查看其他版本</button>
                 
                 <div class="old-versions" id="oldVersions">
+                    <div class="version-info">
+                        <div><strong>2.5.1版本：</strong> <a href="https://yichuang.lanzouv.com/b0pnbjymf" class="download-link">下载</a></div>
+                        <div style="margin-top: 5px; color: #666;; font-size: 0.9em;"> 修正扫描管理文件区域的路径不一致问题、新增启动时的控制台提示，明确提示程序运行在托盘栏里，可右键程序图标，获取IP端口信息、取消扫描后导出为PDF格式，仅限导出为PNG和JPEG格式</div>
+                    </div>
                     <div class="version-info">
                         <div><strong>2.5版本：</strong> <a href="https://yichuang.lanzouv.com/b0pnbjymf" class="download-link">下载</a></div>
                         <div style="margin-top: 5px; color: #666;; font-size: 0.9em;"> 已实现真正的后台静默扫描、大幅提升主流扫描仪的兼容性、修复了VBS扫描脚本在部分系统下的编码乱码问题、扫描前自动清理残留文件、扫描完成后立即释放、WIA设备智能释放、打印状态智能重置、大幅缩短打印超时和扫描超时、扫描完成的文件超过30分钟自动删除并支持手动一键清空、扫描状态消息实时显示在控制台、打印静默化增强</div>
@@ -309,11 +343,12 @@
 
         <!-- 版本更新 -->
         <section>
-            <h2>2.5.1版本更新内容</h2>
+            <h2>2.5.2版本更新内容</h2>
             <ul>
-                <li>修正扫描管理文件区域的路径不一致问题</li>
-                <li>新增启动时的控制台提示，明确提示程序运行在托盘栏里，可右键程序图标，获取IP端口信息</li>
-                <li>取消扫描后导出为PDF格式，仅限导出为PNG和JPEG格式</li>
+                <li>美化了页面布局，更美观</li>
+                <li>logo图标改成白色透明</li>
+                <li>说明区支持展开/收纳，并自动记忆状态</li>
+                <li>打印份数支持自定义参数</li>
             </ul>
         </section>
 
@@ -321,14 +356,14 @@
         <section>
             <h2>使用说明</h2>
             <p style="background: #fff3cd; padding: 15px; border-radius: 4px; margin-bottom: 20px; color: #856404;">
-            <strong> 建议：</strong>
-            </br>需确保文件路径不含中文，若带中文则可能导致程序无法运行。
-            </br>如遇无法运行，可能是权限不够或被防火墙/安全软件拦截，请关闭防火墙和安全软件后使用管理员权限重新运行
-            </br>取消打印后马上扫描可能导致打印机/扫描仪被锁定，请人工重启打印机/扫描仪。</p>
+            <strong>建议：</strong>
+            <br>需确保文件路径不含中文，若带中文则可能导致程序无法运行。
+            <br>如遇无法运行，可能是权限不够或被防火墙/安全软件拦截，请关闭防火墙和安全软件后使用管理员权限重新运行
+            <br>取消打印后马上扫描可能导致打印机/扫描仪被锁定，请人工重启打印机/扫描仪。</p>
             <ol>
                 <li>在接打印机的目标电脑上创建文件夹，将软件放入（最好win10，电脑名、文件夹和软件名都需是英文）</li>
                 <li>右键exe文件，使用管理员权限打开，托盘栏会生成图标，短暂显示控制台弹窗</li>
-                <li>控制台5秒后隐藏，等待控制台隐藏即可。若5秒内按了任意键则会保留显示控制台。</br>可通过右键托盘栏图标，控制其显示和隐藏，关闭控制台则会关闭软件</li>
+                <li>控制台5秒后隐藏，等待控制台隐藏即可。若5秒内按了任意键则会保留显示控制台。<br>可通过右键托盘栏图标，控制其显示和隐藏，关闭控制台则会关闭软件</li>
                 <li>右键托盘栏图标，会展示IP端口，其他设备在浏览器地址栏输入该IP端口即可进入可视化网页，在网页进行打印和扫描操作</li>
                 <li>右键托盘栏图标，可安装二维码生成插件，做成二维码分发给局域网的其他人使用</li>
                 <li>其他设备通过该IP端口访问网页后，通过【打印】和【扫描】标签页切换功能：
@@ -341,7 +376,7 @@
                 <li>扫描完成的文件可直接预览、下载或重新打印，支持点击"清空队列"按钮一键清空所有扫描文件</li>
                 <li>上传的文件会保存在主机的【uploads】文件夹里，若不主动删除，则会在10分钟后自动删除</li>
                 <li>扫描的文件会保存在主机的【scanned_files】文件夹里，若不主动删除，则会在30分钟后自动删除</li>
-                <li>扫描仪被锁定时，会自动强制释放，无需重启主机电脑或手动重启扫描仪，等待1-5分钟即可。</br>若仍未释放，请人工重启扫描仪</li>
+                <li>扫描仪被锁定时，会自动强制释放，无需重启主机电脑或手动重启扫描仪，等待1-5分钟即可。<br>若仍未释放，请人工重启扫描仪</li>
                 <li>所有操作均有提示，界面直观，无需额外说明</li>
                 <li>扫描和打印操作会自动避免设备冲突</li>
                 <li>网络相关设置请在托盘菜单【网络配置】中操作（必须管理员权限）</li>
@@ -355,7 +390,7 @@
         <!-- 修复工具 -->
         <section>
             <h2>修复工具 2.3版本</h2>
-            <p>若 <code>print_server2.5.1.exe</code> 运行报错，可使用对应系统的修复工具：</p>
+            <p>若 <code>print_server2.5.2.exe</code> 运行报错，可使用对应系统的修复工具：</p>
             <p>修复工具是检测程序运行环境，部分修复项需要手动下载</p>
             <ul>
                 <li><code>win7_fix_tool_2.3.py</code> - Windows 7 专用修复工具（支持打印及扫描环境检测，2.3版优化）</li>
@@ -408,6 +443,41 @@
                 <li><strong>兼容性提示：</strong>如确实安装了扫描仪但扫描失败，请在目标电脑上进行扫描操作</li>
             </ul>
         </section>
+
+        <section>
+            <h2>其他</h2>
+            <ul>
+                <li>支持 Win7/Win10/Win11 系统</li>
+                <li>技术栈：Python 3.7.9 + Flask + Windows API + COM组件 + WIA扫描接口</li>
+                <li>详细功能和更新请见托盘菜单或网页界面</li>
+                <li>GitHub 仓库：<a href="https://github.com/a937750307/lan-printing" style="color:#667eea; text-decoration:none;">https://github.com/a937750307/lan-printing</a></li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>依赖安装命令</h2>
+            <p>全部复制粘贴到命令行即可：</p>
+            <div class="collapsed-section">
+                <button class="collapsed-header" onclick="toggleCollapsed(this)">查看依赖安装命令</button>
+                <div class="collapsed-content">
+                    <p style="margin-top: 12px; word-break: break-all;">pip install flask flask_cors werkzeug requests requests_toolbelt pysnmp pystray pillow comtypes pywin32 wmi waitress certifi chardet win32print win32api win32com ctypes winreg pystray pillow PIL Pillow</p>
+                    <p style="margin-top: 12px;">建议在打包前先执行上述命令，确保所有依赖齐全。</p>
+                    <p style="margin-top: 12px;">打包建议使用 PyInstaller 5.x 及以上版本，推荐命令：</p>
+                    <p style="margin-top: 12px; word-break: break-all;">pyinstaller --clean --noconfirm print_server2.5.2.spec</p>
+                    <p style="margin-top: 12px;">如需自定义依赖或资源，请编辑 .spec 文件的 hiddenimports 和 datas 部分。</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>反馈与支持</h2>
+            <ul>
+                <li>反馈QQ群：1014812705，进群修改备注：系统版本-昵称-52论坛ID</li>
+                <li>也可在GitHub仓库提交Issue反馈问题或建议</li>
+                <li>欢迎Star和Fork本项目</li>
+                <li>有任何问题或建议，欢迎通过GitHub联系作者</li>
+            </ul>
+        </section>
     </div>
     
     <footer>
@@ -421,6 +491,12 @@
     </footer>
     
     <script>
+        function toggleCollapsed(button) {
+            const content = button.nextElementSibling;
+            const expanded = content.classList.toggle('show');
+            button.textContent = expanded ? '收起依赖安装命令' : '查看依赖安装命令';
+        }
+
         function toggleOldVersions() {
             const oldVersions = document.getElementById('oldVersions');
             const button = document.querySelector('.version-toggle');
