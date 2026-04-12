@@ -1,4 +1,4 @@
-# 内网打印及扫描服务 2.5.2版本
+# 内网打印及扫描服务 2.6版本（测试版v1，非成品）
 - 使用 Python3.7.9 编程和打包，兼容性更好
 - 拥有内网打印及扫描功能
 
@@ -36,7 +36,7 @@
 - 【赞助】：可在经济方面支持一下作者（你的支持就是我的动力）
 - 【版本升级】：新增版本升级页面，内含软件介绍和使用方法
 
-## 2.5.2版本更新内容
+## 2.6版本更新内容
 -  美化了页面布局，更美观
 -  logo图标改成白色透明
 -  说明区支持展开/收纳，并自动记忆状态
@@ -59,6 +59,33 @@
   - 【打印功能】：选择/拖拽文件上传，设置打印参数后提交即可。
   - 【扫描功能】：选择扫描仪，设置扫描格式，点击扫描按钮即可。
 - 上传后可在队列中删除未打印的文件，随时取消。
+
+### Poppler（PDF 渲染）
+
+项目使用 `pdf2image` 将 PDF 渲染为位图，需要本地 Poppler 二进制支持。为了让所有用户都能免安装使用，建议将 Poppler 文件夹放在程序根目录（例如 `poppler/` 或 `poppler/bin/`）。代码会自动查找 Poppler，优先级如下：
+
+- 环境变量 `POPPLER_PATH` 指定的目录（若设置）
+- `path_manager.get_poppler_path()`（如已实现配置）
+- PyInstaller 解包目录（`sys._MEIPASS`）
+- 项目根目录下的 `poppler/`, `poppler/bin/`, `poppler/Library/bin/`, 或 `third_party/poppler/...`
+
+如果不想修改系统 PATH，可把 Poppler 的 `bin` 目录直接放到仓库根目录 `poppler` 下，打包为 `exe` 时也把该目录一并包含进可执行文件（示例见下）。
+
+示例：在本机测试渲染
+```python
+from pdf2image import convert_from_path
+pages = convert_from_path(r"C:\path\to\file.pdf", dpi=300, poppler_path=r"C:\full\path\to\poppler\bin")
+pages[0].save('page0.png')
+```
+
+在使用 PyInstaller 打包为单文件 `exe` 时，建议把 Poppler `bin` 目录以二进制资源加入：
+```bash
+pyinstaller --onefile \
+  --add-binary "third_party/poppler/Library/bin;poppler_bin" \
+  print_server2.6.py
+```
+
+注意：Poppler 可能受 GPL 许可约束，分发前请核对许可合规性。
 - 扫描完成的文件可直接预览、下载或重新打印，支持点击"清空队列"按钮一键清空所有扫描文件（超过30分钟的扫描文件也会自动删除）。
 - 扫描仪被锁定时，程序会自动尝试释放扫描仪，无需重启目标电脑或手动清理。
 - 所有操作均有提示，界面直观，无需额外说明。
@@ -70,7 +97,7 @@
 - 控制台自动维护，无需手动清理。
 
 ## 修复工具 2.3版本
-  - 若 `print_server2.5.2.exe` 运行报错，可使用对应系统的修复工具
+  - 若 `print_server2.6.exe` 运行报错，可使用对应系统的修复工具
   - `win7_fix_tool_2.3.py` - Windows 7 专用修复工具（支持打印及扫描环境检测，2.3版优化）
   - `win10_fix_tool_2.3.py` - Windows 10 专用修复工具（支持打印及扫描环境检测，2.3版优化）
   - `win11_fix_tool_2.3.py` - Windows 11 专用修复工具（支持打印及扫描环境检测，2.3版优化）
@@ -116,6 +143,7 @@
 - 2.3版本成品下载链接：https://yichuang.lanzouo.com/b0pn74c4b
 - 2.4版本成品下载链接：https://yichuang.lanzouv.com/b0pnbjymf
 - 2.5.2版本成品下载链接：https://yichuang.lanzouv.com/b0pncnyud
+- 2.6版本成品下载链接：当前为测试品，非成品
 
 ## 其他
 - 支持 Win7/Win10/Win11 系统
@@ -127,7 +155,7 @@
 - pip install flask flask_cors werkzeug requests requests_toolbelt pysnmp pystray pillow comtypes pywin32 wmi waitress certifi chardet win32print win32api win32com ctypes winreg pystray pillow PIL Pillow
 - 建议在打包前先执行上述命令，确保所有依赖齐全。
 - 打包建议使用 PyInstaller 5.x 及以上版本，推荐命令：
-  pyinstaller --clean --noconfirm print_server2.5.2.spec
+  pyinstaller --clean --noconfirm print_server2.6.spec
 - 如需自定义依赖或资源，请编辑 .spec 文件的 hiddenimports 和 datas 部分。
 
 ## 【常见问题/解决方案】
