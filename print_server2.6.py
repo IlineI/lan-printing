@@ -246,7 +246,7 @@ try:
     # pdf2image 可用性
     try:
         import pdf2image
-        print(f"pdf2image available: version={getattr(pdf2image, '__version__', 'unknown')}")
+        print("pdf2image available")
     except Exception as _e:
         print(f"pdf2image not available: {_e}")
 
@@ -2687,7 +2687,7 @@ HTML = '''
 </head>
 <body>
 <div class="container">
-    <h1 class="mb-4 text-center">内网打印及扫描服务v2.6（测试版v1）</br>
+    <h1 class="mb-4 text-center">内网打印及扫描服务v2.6</br>
     <span class="author-info"><a href="https://www.937788.xyz/" target="_blank" style="color: #6c757d; text-decoration: none;">（yckj666@52PJ，作者：忆痕）</a>
     </p><a href="https://github.com/a937750307/lan-printing" target="_blank" style="color: #007bff; text-decoration: none;">【Github】</a>
     <a href="https://zanzhu.937788.xyz" target="_blank" style="color: #28a745; text-decoration: none;">【赞助】</a>
@@ -2850,6 +2850,8 @@ HTML = '''
                     <li><strong>Office文档:</strong> 支持DOC/DOCX、XLS/XLSX、PPT/PPTX，使用Office应用程序或COM对象</li>
                     <li><strong>文本文件:</strong> 支持TXT格式，直接发送到打印机</li>
                     <li><strong>️打印参数:</strong> 直接应用您设置的打印参数（双面、纸张、质量）到实际打印任务</li>
+                    <li><strong>老旧打印机兼容性:</strong> 已对2000年左右的部分老旧打印机进行测试，不支持TXT格式，支持PDF、JPG、PNG、DOC、DOCX、PPT、PPTX、XLS、XLSX格式。采用转换为BMP流方案和直接发送原始字节流方案。</li>
+                    <li><strong>主流打印机支持格式:</strong> PDF、JPG、PNG、DOC、DOCX、PPT、PPTX、XLS、XLSX、TXT</li>
                     <li><strong>成功标识:</strong> 看到绿色表示打印任务已成功发送</li>
                     <li><strong>备用方案:</strong> 如果主要方法失败，系统会自动尝试备用打印方案</li>
                 </ul>
@@ -2889,9 +2891,7 @@ HTML = '''
             </div>
             <div class="collapsible-help-body">
             <div class="small">
-                如需使用<strong>横版打印</strong>或<strong>自定义页码范围</strong>或<strong>布局调整</strong>等高级功能，请先使用 
-                <strong>Microsoft Office</strong> 或 <strong>WPS Office</strong> 等办公软件在本地进行编辑后，再发送到此服务进行打印。
-                这样可以获得最佳的打印效果！
+                如需使用<strong>横版打印</strong>、<strong>自定义页码范围</strong>、<strong>布局调整</strong>、<strong>黑白打印</strong>等功能，请先使用 <strong>Microsoft Office</strong> 或 <strong>WPS Office</strong> 等办公软件在本地进行编辑/设置后导出，再发送到此服务进行打印。 这样可以获得最佳的打印效果！
             </div>
             </div>
         </div>
