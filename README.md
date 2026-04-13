@@ -114,7 +114,7 @@
 - 2.3版本成品下载链接：https://yichuang.lanzouo.com/b0pn74c4b
 - 2.4版本成品下载链接：https://yichuang.lanzouv.com/b0pnbjymf
 - 2.5.2版本成品下载链接：https://yichuang.lanzouv.com/b0pncnyud
-- 2.6版本成品下载链接：https://yichuang.lanzouv.com/b0pnjaeqd（已适配老旧打印机）
+- 2.6版本成品下载链接：https://yichuang.lanzouv.com/b0pnjaeqd （已适配老旧打印机）
 
 ## 其他
 - 支持 Win7/Win10/Win11 系统
