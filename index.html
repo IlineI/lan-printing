@@ -246,13 +246,17 @@
             
             <div class="versions-container">
                 <div class="version-info" style="background: #d4edda; border-left: 4px solid #28a745;">
-                    <div><strong style="color: #155724;">2.5.2版本（最新推荐）：</strong> <a href="https://yichuang.lanzouv.com/b0pncnyud" class="download-link" style="background: #28a745;">下载</a></div>
-                    <div style="margin-top: 5px; color: #155724; font-size: 0.9em;"> 美化了页面布局，更美观、logo图标改成白色透明、说明区支持展开/收纳，并自动记忆状态、打印份数支持自定义参数</div>
+                    <div><strong style="color: #155724;">2.6版本（最新推荐，已适配老旧打印机）：</strong> <a href="https://yichuang.lanzouv.com/b0pnjaeqd" class="download-link" style="background: #28a745;">下载</a></div>
+                    <div style="margin-top: 5px; color: #155724; font-size: 0.9em;"> 适配20年前的老旧打印机（2000年左右的打印机），优化兼容性。增加了转换为BMP流方案和直接发送原始字节流方案。已对HP LaserJet 1020进行测试（该打印机是HP惠普公司于2005年推出的黑白激光打印机，属于老旧的 host‑based 激光机）。测试结果显示，支持JPG/PNG、PDF、PPT/PPTX、DOC/DOCX、XLS/XLSX等格式打印，不支持TXT格式</div>
                 </div>
                 
                 <button class="version-toggle" onclick="toggleOldVersions()">查看其他版本</button>
                 
                 <div class="old-versions" id="oldVersions">
+                    <div class="version-info">
+                        <div><strong>2.5.2版本：</strong> <a href="https://yichuang.lanzouv.com/b0pnbjymf" class="download-link">下载</a></div>
+                        <div style="margin-top: 5px; color: #666;; font-size: 0.9em;"> 美化了页面布局，更美观、logo图标改成白色透明、说明区支持展开/收纳，并自动记忆状态、打印份数支持自定义参数</div>
+                    </div>
                     <div class="version-info">
                         <div><strong>2.5.1版本：</strong> <a href="https://yichuang.lanzouv.com/b0pnbjymf" class="download-link">下载</a></div>
                         <div style="margin-top: 5px; color: #666;; font-size: 0.9em;"> 修正扫描管理文件区域的路径不一致问题、新增启动时的控制台提示，明确提示程序运行在托盘栏里，可右键程序图标，获取IP端口信息、取消扫描后导出为PDF格式，仅限导出为PNG和JPEG格式</div>
@@ -325,8 +329,9 @@
                 <div class="feature-item"><strong>多格式扫描输出</strong>：支持PNG、JPEG、PDF格式（推荐PNG获得最佳质量）</div>
                 <div class="feature-item"><strong>扫描文件管理</strong>：支持预览、下载、打印、删除扫描完成的文件</div>
                 <div class="feature-item"><strong>打印队列管理</strong>：实时监控Windows打印队列，支持任务取消</div>
-                <div class="feature-item"><strong>多种文件格式</strong>：支持JPG/PNG、PDF、PPT/PPTX、TXT打印</div>
                 <div class="feature-item"><strong>打印参数自定义</strong>：份数、单双面、纸张大小、打印质量</div>
+                <div class="feature-item"><strong>主流打印机支持格式</strong>：兼容Canon、HP、Epson等主流品牌打印机，支持JPG/PNG、PDF、PPT/PPTX、DOC/DOCX、XLS/XLSX、TXT（建议转换成JPG和PNG打印）</div>
+                <div class="feature-item"><strong>老旧打印机支持格式</strong>：兼容部分2000年左右的老旧打印机，支持JPG/PNG、PDF、PPT/PPTX、DOC/DOCX、XLS/XLSX，不支持TXT格式</div>
                 <div class="feature-item"><strong>智能边距</strong>：自动检测页眉页脚，无页眉页脚时最小化边距</div>
                 <div class="feature-item"><strong>过滤虚拟打印机</strong>：自动检测并过滤虚拟打印机</div>
                 <div class="feature-item"><strong>日志记录与管理</strong>：统一显示最新50条打印和扫描日志，每天下午3点自动清理7天前记录</div>
@@ -336,6 +341,8 @@
                 <div class="feature-item"><strong>控制台管理</strong>：支持显示/隐藏控制台窗口，超过1000行自动清理</div>
                 <div class="feature-item"><strong>内网穿透支持</strong>：支持内网、公网、内网穿透模式，兼容各种穿透工具</div>
                 <div class="feature-item"><strong>文件兼容性</strong>：优化UTF-8/GBK/GB2312等编码格式兼容性</div>
+                <div class="feature-item"><strong>版权信息</strong>：点击可跳转作者发布页，发现更多工具</div>
+                <div class="feature-item"><strong>Github仓库</strong>：点击可自动跳转作者仓库页面，可自行下载源代码</div>
                 <div class="feature-item"><strong>Web界面优化</strong>：打印和扫描通过标签页切换，界面简洁直观</div>
                 <div class="feature-item"><strong>赞助支持</strong>：可在经济方面支持一下作者</div>
             </div>
@@ -343,12 +350,9 @@
 
         <!-- 版本更新 -->
         <section>
-            <h2>2.5.2版本更新内容</h2>
+            <h2>2.6版本更新内容</h2>
             <ul>
-                <li>美化了页面布局，更美观</li>
-                <li>logo图标改成白色透明</li>
-                <li>说明区支持展开/收纳，并自动记忆状态</li>
-                <li>打印份数支持自定义参数</li>
+                <li>适配20年前的老旧打印机（2000年左右的打印机），优化兼容性</li>
             </ul>
         </section>
 
@@ -389,8 +393,8 @@
 
         <!-- 修复工具 -->
         <section>
-            <h2>修复工具 2.3版本</h2>
-            <p>若 <code>print_server2.5.2.exe</code> 运行报错，可使用对应系统的修复工具：</p>
+            <h2>软件运行环境检测与修复工具 2.3版本</h2>
+            <p>若 <code>print_server2.6.exe</code> 运行报错，可使用对应系统的修复工具：</p>
             <p>修复工具是检测程序运行环境，部分修复项需要手动下载</p>
             <ul>
                 <li><code>win7_fix_tool_2.3.py</code> - Windows 7 专用修复工具（支持打印及扫描环境检测，2.3版优化）</li>
@@ -449,6 +453,7 @@
             <ul>
                 <li>支持 Win7/Win10/Win11 系统</li>
                 <li>技术栈：Python 3.7.9 + Flask + Windows API + COM组件 + WIA扫描接口</li>
+                <li>若使用源码运行，请解压【poppler.rar】压缩文件到项目根目录，用于处理PDF文件（仅适配老旧打印机需要）</li>
                 <li>详细功能和更新请见托盘菜单或网页界面</li>
                 <li>GitHub 仓库：<a href="https://github.com/a937750307/lan-printing" style="color:#667eea; text-decoration:none;">https://github.com/a937750307/lan-printing</a></li>
             </ul>
@@ -460,10 +465,10 @@
             <div class="collapsed-section">
                 <button class="collapsed-header" onclick="toggleCollapsed(this)">查看依赖安装命令</button>
                 <div class="collapsed-content">
-                    <p style="margin-top: 12px; word-break: break-all;">pip install flask flask_cors werkzeug requests requests_toolbelt pysnmp pystray pillow comtypes pywin32 wmi waitress certifi chardet win32print win32api win32com ctypes winreg pystray pillow PIL Pillow</p>
+                    <p style="margin-top: 12px; word-break: break-all;">pip install flask flask_cors werkzeug requests requests_toolbelt pysnmp pystray pillow comtypes pywin32 wmi waitress certifi chardet win32print win32api win32com ctypes winreg pystray pillow PIL Pillow pdf2image</p>
                     <p style="margin-top: 12px;">建议在打包前先执行上述命令，确保所有依赖齐全。</p>
                     <p style="margin-top: 12px;">打包建议使用 PyInstaller 5.x 及以上版本，推荐命令：</p>
-                    <p style="margin-top: 12px; word-break: break-all;">pyinstaller --clean --noconfirm print_server2.5.2.spec</p>
+                    <p style="margin-top: 12px; word-break: break-all;">pyinstaller --clean --noconfirm print_server2.6.spec</p>
                     <p style="margin-top: 12px;">如需自定义依赖或资源，请编辑 .spec 文件的 hiddenimports 和 datas 部分。</p>
                 </div>
             </div>
