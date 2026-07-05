@@ -1,0 +1,458 @@
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div class="container mt-3">
+            {% for category, msg in messages %}
+                <div class="alert alert-{{category}} alert-dismissible fade show" role="alert">
+                    {{msg}}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+<!doctype html>
+<html lang="zh-cn" spellcheck="false">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>内网打印及扫描服务</title>
+    <!-- 使用本地 Bootstrap CSS -->
+    <link href="/static/bootstrap.min.css" rel="stylesheet">
+    <!-- 自定义样式 -->
+    <link href="/static/css/style.css" rel="stylesheet">
+</head>
+<body>
+<div class="container">
+    <h1 class="mb-4 text-center">内网打印及扫描服务v2.6</br>
+    <span class="author-info"><a href="https://www.937788.xyz/" target="_blank" style="color: #6c757d; text-decoration: none;">（yckj666@52PJ，作者：忆痕）</a>
+    </p><a href="https://github.com/a937750307/lan-printing" target="_blank" style="color: #007bff; text-decoration: none;">【Github】</a>
+    <a href="https://zanzhu.937788.xyz" target="_blank" style="color: #28a745; text-decoration: none;">【赞助】</a>
+    <a href="https://print.937788.xyz" target="_blank" style="color: #dc3545; text-decoration: none;">【版本更新】</a></span></h1>
+    
+    <!-- 功能切换导航 -->
+    <div class="text-center mb-4">
+        <div class="btn-group" role="group" aria-label="功能切换">
+            <button type="button" class="btn btn-primary" id="printTabBtn" onclick="switchTab('print')">
+                ️ 打印
+            </button>
+            <button type="button" class="btn btn-outline-primary" id="scanTabBtn" onclick="switchTab('scan')">
+                 扫描
+            </button>
+        </div>
+        <p class="text-muted mt-2">可右键托盘栏图标进行网络配置和其他设置</p>
+    </div>
+
+    <!-- 打印管理内容 -->
+    <div class="tab-content" id="printTab">
+        <div class="main-content">
+            <form method="post" enctype="multipart/form-data" class="row g-3 mb-4" id="printForm">
+                <input type="hidden" name="action" value="print">
+                <input type="hidden" name="device_name" id="deviceNameField" value="">
+                <div class="col-md-6 print-field">
+                    <label class="form-label">选择打印机 
+                            <button type="button" class="btn btn-sm inline-refresh-btn" onclick="refreshPrinterList()" title="刷新打印机列表">
+                             刷新
+                        </button>
+                    </label>
+                    <select name="printer" class="form-select" id="printerSelect" spellcheck="false">
+                        {% if printers %}
+                            {% for p in printers %}
+                                <option value="{{p}}" {% if p == default_printer %}selected{% endif %}>{{p}}{% if p == default_printer %} (默认){% endif %}</option>
+                            {% endfor %}
+                        {% else %}
+                            <option value="">未检测到可用打印机</option>
+                        {% endif %}
+                    </select>
+                    <div class="form-text text-muted">
+                        {% if printers %}
+                            <strong>️ 重要提醒:</strong> 请仔细选择打印机！程序会严格按照您的选择发送到指定打印机，不会回退到默认打印机。
+                            <br>已过滤虚拟打印机，自动选择默认打印机，可手动刷新列表
+                        {% else %}
+                            <span class="text-warning">️ 未检测到物理打印机，请检查打印机连接后点击刷新</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-6 print-field">
+                    <label class="form-label">打印份数</label>
+                    <select name="copies" class="form-select" id="copiesSelect" spellcheck="false">
+                        <option value="1" selected>1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                        <option value="10">10</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                    <div class="copies-custom-wrap" id="copiesCustomWrap">
+                        <input type="number" class="form-control" id="copiesCustomInput" min="1" max="9999" step="1" value="1" spellcheck="false">
+                        <div class="form-text text-muted">输入自定义份数，提交时会自动使用该值</div>
+                    </div>
+                </div>
+                <div class="col-md-4 print-field">
+                    <label class="form-label">单双面
+                        {% if printer_caps and printer_caps.get('duplex_support') %}
+                        <span class="badge bg-success ms-1">支持</span>
+                        {% endif %}
+                    </label>
+                    <select name="duplex" class="form-select" id="duplexSelect" spellcheck="false">
+                        <option value="1"> 单面打印</option>
+                        {% if printer_caps and printer_caps.get('duplex_support') %}
+                        <option value="2"> 长边翻转 (书本式)</option>
+                        <option value="3"> 短边翻转 (翻页式)</option>
+                        {% endif %}
+                    </select>
+                    {% if printer_caps %}
+                        {% if printer_caps.get('duplex_support') %}
+                        <div class="form-text text-success">
+                            <small> 支持双面打印
+                            {% if printer_caps.get('duplex_modes') %}
+                            - {{ printer_caps.get('duplex_modes')|join(', ') }}
+                            {% endif %}
+                            </small>
+                        </div>
+                        {% else %}
+                        <div class="form-text text-warning">
+                            <small>️ 打印机不支持双面打印，将使用单面模式</small>
+                        </div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                <div class="col-md-4 print-field">
+                    <label class="form-label">纸张大小</label>
+                    <select name="papersize" class="form-select" id="paperSelect" spellcheck="false">
+                        {% if printer_caps and printer_caps.get('papers') %}
+                            {% for p in printer_caps.papers %}
+                            <option value="{{p.id}}" {% if p.id == 9 %}selected{% endif %}>{{p.name}}</option>
+                            {% endfor %}
+                        {% else %}
+                            <option value="9" selected>A4</option>
+                        {% endif %}
+                    </select>
+                </div>
+                <div class="col-md-4 print-field">
+                    <label class="form-label">打印分辨率</label>
+                    <select name="quality" class="form-select" id="qualitySelect" spellcheck="false">
+                        {% if printer_caps and printer_caps.get('resolutions') %}
+                            {% for r in printer_caps.resolutions %}
+                            <option value="{{r}}">{{r}}</option>
+                            {% endfor %}
+                        {% else %}
+                            <option value="600x600">600x600</option>
+                        {% endif %}
+                    </select>
+                </div>
+                <div class="col-12 print-file-area">
+                    <label class="form-label">选择文件（支持PDF/JPG/PNG/DOC/DOCX/PPT/PPTX/XLS/XLSX/TXT，支持多选和拖拽）</label>
+                    
+                    <!-- 拖拽上传区域 -->
+                    <div class="file-drop-area" id="fileDropArea">
+                        <div class="drop-icon"></div>
+                        <h5>拖拽文件到此处</h5>
+                        <p>或者 <strong>点击选择文件</strong></p>
+                        <p class="text-muted small">支持多个文件同时上传</p>
+                        <input type="file" name="file" multiple class="form-control" id="fileInput" style="display: none;" spellcheck="false">
+                    </div>
+                    
+                    <!-- 选中的文件列表 -->
+                    <div class="file-list" id="fileList" style="display: none;">
+                        <h6>已选择的文件：</h6>
+                        <div id="selectedFiles"></div>
+                    </div>
+                </div>
+                <div class="col-12 text-end print-submit-row">
+                    {% if printers %}
+                        <button type="submit" class="btn btn-primary px-4" id="printButton">上传并打印</button>
+                    {% else %}
+                        <button type="button" class="btn btn-secondary px-4" disabled title="无可用打印机">无法打印 - 请检查打印机</button>
+                    {% endif %}
+                </div>
+            </form>
+
+            <!-- 打印设置说明 -->
+            <div class="alert alert-info collapsible-help" data-collapse-key="print-help">
+                <div class="collapsible-help-header" role="button" tabindex="0" onclick="toggleHelpSection('print-help')" onkeydown="handleHelpToggleKey(event, 'print-help')">
+                    <h6><i class="bi bi-info-circle"></i> 静默打印说明</h6>
+                    <span class="collapsible-help-toggle"></span>
+                </div>
+                <div class="collapsible-help-body">
+                <ul class="mb-0 small">
+                    <li><strong>静默打印:</strong> 无需手动确认，文件会自动发送到选择的打印机</li>
+                    <li><strong>PDF文件:</strong> 优先使用WPS、Office或Adobe Reader进行静默打印，自动选择最佳方案</li>
+                    <li><strong>️图片文件:</strong> 支持JPG、PNG格式，使用Windows图片查看器静默打印</li>
+                    <li><strong>Office文档:</strong> 支持DOC/DOCX、XLS/XLSX、PPT/PPTX，使用Office应用程序或COM对象</li>
+                    <li><strong>文本文件:</strong> 支持TXT格式，直接发送到打印机</li>
+                    <li><strong>️打印参数:</strong> 直接应用您设置的打印参数（双面、纸张、质量）到实际打印任务</li>
+                    <li><strong>老旧打印机兼容性:</strong> 已对2000年左右的部分老旧打印机进行测试，不支持TXT格式，支持PDF、JPG、PNG、DOC、DOCX、PPT、PPTX、XLS、XLSX格式。采用转换为BMP流方案和直接发送原始字节流方案。</li>
+                    <li><strong>主流打印机支持格式:</strong> PDF、JPG、PNG、DOC、DOCX、PPT、PPTX、XLS、XLSX、TXT</li>
+                    <li><strong>成功标识:</strong> 看到绿色表示打印任务已成功发送</li>
+                    <li><strong>备用方案:</strong> 如果主要方法失败，系统会自动尝试备用打印方案</li>
+                </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 环境状态提示（仅打印页面显示） -->
+        {% if env_status %}
+        <div class="alert alert-{{env_status.type}}">
+            <h6><i class="bi bi-{{env_status.icon}}"></i> {{env_status.title}}</h6>
+            <div class="small">{{env_status.message|safe}}</div>
+        </div>
+        {% endif %}
+        
+        <div class="alert alert-info collapsible-help" data-collapse-key="queue-help">
+            <div class="collapsible-help-header" role="button" tabindex="0" onclick="toggleHelpSection('queue-help')" onkeydown="handleHelpToggleKey(event, 'queue-help')">
+                <h6><i class="bi bi-lightbulb"></i> 队列管理功能</h6>
+                <span class="collapsible-help-toggle"></span>
+            </div>
+            <div class="collapsible-help-body">
+            <ul class="mb-0 small">
+                <li><strong>️取消打印:</strong> 如果文件还未实际打印，点击删除按钮可取消打印</li>
+                <li><strong>自动清理:</strong> 上传的文件会在10分钟后自动清理，也可以点击删除按钮手动删除</li>
+                <li><strong>清空队列:</strong> 可以一键删除所有待打印文件，节省时间</li>
+                <li><strong>️文件预览:</strong> 打印前可以预览文件内容，确保正确性</li>
+                <li><strong>文件信息:</strong> 显示文件大小、类型和上传时间，便于管理</li>
+                <li><strong>使用建议:</strong> 打印前检查队列，删除不需要的文件可以节省纸张</li>
+            </ul>
+            </div>
+        </div>
+        
+        <div class="alert alert-warning collapsible-help" data-collapse-key="advanced-print-help">
+            <div class="collapsible-help-header" role="button" tabindex="0" onclick="toggleHelpSection('advanced-print-help')" onkeydown="handleHelpToggleKey(event, 'advanced-print-help')">
+                <h6><i class="bi bi-info-circle"></i> 高级打印功能提示</h6>
+                <span class="collapsible-help-toggle"></span>
+            </div>
+            <div class="collapsible-help-body">
+            <div class="small">
+                如需使用<strong>横版打印</strong>、<strong>自定义页码范围</strong>、<strong>布局调整</strong>、<strong>黑白打印</strong>等功能，请先使用 <strong>Microsoft Office</strong> 或 <strong>WPS Office</strong> 等办公软件在本地进行编辑/设置后导出，再发送到此服务进行打印。 这样可以获得最佳的打印效果！
+            </div>
+            </div>
+        </div>
+        
+        <div class="d-flex justify-content-between align-items-center mt-4">
+            <h4 class="mb-0">打印队列</h4>
+            {% if files %}
+            <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteAllFiles()" title="清空所有待打印文件">
+                ️ 清空队列
+            </button>
+            {% endif %}
+        </div>
+        <table class="table table-sm table-hover align-middle mt-2 queue-table">
+            <thead class="table-light"><tr><th>文件名</th><th>大小</th><th>上传时间</th><th>操作</th></tr></thead>
+            <tbody>
+            {% for f in files %}
+                <tr>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <span class="file-type-badge file-type-{{f.extension}} me-2">{{f.extension}}</span>
+                            <div>
+                                <div class="file-name">{{f.name}}</div>
+                                {% if f.extension in ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'] %}
+                                    <small class="text-muted">办公文档</small>
+                                {% elif f.extension in ['jpg', 'jpeg', 'png', 'gif', 'bmp'] %}
+                                    <small class="text-muted">图片文件</small>
+                                {% elif f.extension == 'txt' %}
+                                    <small class="text-muted">文本文件</small>
+                                {% else %}
+                                    <small class="text-muted">其他文件</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="text-muted">{{f.size}}</td>
+                    <td class="text-muted">{{f.upload_time}}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <a href="/preview/{{f.name}}" target="_blank" class="btn btn-outline-primary btn-sm" title="预览文件">
+                                ️ 预览
+                            </a>
+                            <button type="button" class="btn btn-outline-danger btn-sm" 
+                                    onclick="deleteFile('{{f.name}}')" title="从队列中删除">
+                                ️ 删除
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            {% else %}
+                <tr>
+                    <td colspan="4">
+                        <div class="empty-queue">
+                            <div class="mb-3"></div>
+                            <h6 class="mb-2">队列为空</h6>
+                            <p class="mb-0">还没有待打印的文件，请先上传文件</p>
+                        </div>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        
+        {% if files %}
+        <div class="alert alert-info">
+            <small>
+                 当前队列中有 <strong>{{files|length}}</strong> 个文件 | 
+                ️ 点击删除按钮可以从队列中移除文件 | 
+                 文件会在10分钟后自动清理
+            </small>
+        </div>
+        {% endif %}
+
+        <h4 class="mt-4">打印日志</h4>
+        <ul class="list-group log-list mb-0">
+            {% for l in logs %}
+                <li class="list-group-item">{{l}}</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <!-- 扫描管理内容 -->
+    <div class="tab-content" id="scanTab" style="display: none;">
+        <div class="main-content">
+            <!-- 扫描区域 -->
+            <div class="card mb-4" style="border-left: 4px solid #17a2b8;">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="bi bi-upc-scan"></i>  扫描功能</h5>
+                </div>
+                <div class="card-body">
+                    <form id="scanForm" class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">选择扫描仪 
+                                  <button type="button" class="btn btn-sm inline-refresh-btn" onclick="refreshScannerList()" title="刷新扫描仪列表">
+                                     刷新
+                                </button>
+                            </label>
+                            <select name="scanner_id" class="form-select" id="scannerSelect" spellcheck="false">
+                                <option value="">正在检测扫描仪...</option>
+                            </select>
+                            <div class="form-text text-muted" id="scannerHelpText">
+                                <small> 支持WIA兼容的扫描仪设备，包括多功能一体机</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">扫描格式</label>
+                            <select name="format" class="form-select" id="formatSelect" spellcheck="false">
+                                <option value="PNG" selected>PNG (推荐)</option>
+                                <option value="JPEG">JPEG</option>
+
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="button" class="btn btn-info w-100" id="scanButton" onclick="startScan()">
+                                 开始扫描
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <!-- 醒目的操作提示 -->
+                    <div class="alert alert-warning mt-3" style="border-left: 4px solid #ffc107; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);">
+                        <h6 class="mb-3" style="color: #856404; font-weight: bold;">
+                            ️ 扫描前请确认
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <ul class="mb-0 small" style="color: #856404;">
+                                    <li><strong>已放入文件：</strong>已放入要扫描的文件</li>
+                                    <li><strong>位置正确：</strong>文件位置和方向摆放正确</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <ul class="mb-0 small" style="color: #856404;">
+                                    <li><strong>盖子关好：</strong>扫描仪盖子已完全盖好</li>
+                                    <li><strong>避免冲突：</strong>扫描期间请勿使用打印功能</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 设备状态提示 -->
+                    <div id="deviceStatusAlert" class="alert alert-danger mt-2" style="display: none;">
+                        <h6><i class="bi bi-exclamation-circle"></i> 设备忙碌中</h6>
+                        <p id="deviceStatusMessage" class="mb-0"></p>
+                    </div>
+                    
+                    <!-- 扫描状态显示区域 -->
+                    <div id="scanStatusArea" class="mt-3" style="display: none;">
+                        <div class="alert alert-success" id="scanSuccessAlert" style="display: none;">
+                            <h6> 扫描成功</h6>
+                            <p id="scanSuccessMessage"></p>
+                        </div>
+                        <div class="alert alert-danger" id="scanErrorAlert" style="display: none;">
+                            <h6> 扫描失败</h6>
+                            <p id="scanErrorMessage"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info mt-3 collapsible-help" data-collapse-key="scan-help">
+                        <div class="collapsible-help-header" role="button" tabindex="0" onclick="toggleHelpSection('scan-help')" onkeydown="handleHelpToggleKey(event, 'scan-help')">
+                            <h6><i class="bi bi-info-circle"></i> 扫描说明</h6>
+                            <span class="collapsible-help-toggle"></span>
+                        </div>
+                        <div class="collapsible-help-body">
+                        <ul class="mb-0 small">
+                            <li><strong>静默扫描:</strong> 完全后台执行，无弹窗干扰，不会影响目标电脑的正常使用</li>
+                            <li><strong>扫描仪检测:</strong> 自动检测WIA兼容的扫描仪和多功能一体机</li>
+                            <li><strong>支持格式:</strong> PNG、JPEG格式，建议使用PNG获得最佳质量</li>
+                            <li><strong>自动设置:</strong> 尝试自动设置300 DPI分辨率和彩色扫描模式</li>
+                            <li><strong>自动保存:</strong> 扫描完成的文件会保存在【扫描文件】区域，支持预览、下载、打印和删除</li>
+                            <li><strong>自动删除:</strong> 扫描文件超过30分钟会自动删除，避免占用磁盘空间</li>
+                            <li><strong>兼容性:</strong> 兼容大多数品牌的扫描仪，如Canon、HP、Epson等</li>
+                            <li><strong>失败处理:</strong> 如果确实安装了扫描仪但扫描失败，请在重启扫描仪或人工操作</li>
+                        </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 扫描文件管理区域 -->
+            <div class="card mb-4" style="border-left: 4px solid #28a745;">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-folder-fill"></i>  扫描文件管理</h5>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-success" onclick="refreshScannedFiles()" title="刷新扫描文件列表">
+                             刷新
+                        </button>
+                        <button type="button" class="btn btn-outline-danger" onclick="clearAllScannedFiles()" title="清空所有扫描文件">
+                             清空队列
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- 扫描文件列表 -->
+                    <div id="scannedFilesList">
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-folder2-open" style="font-size: 2em;"></i>
+                            <p class="mt-2">正在加载扫描文件...</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 文件操作提示 -->
+                    <div class="alert alert-success mt-3">
+                        <h6><i class="bi bi-info-circle"></i> 文件操作说明</h6>
+                        <ul class="mb-0 small">
+                            <li><strong>️ 预览:</strong> 点击图片文件可直接预览，PDF等文件需下载后查看</li>
+                            <li><strong> 下载:</strong> 点击下载按钮将文件保存到本地</li>
+                            <li><strong>️ 打印:</strong> 直接将扫描文件发送到打印机</li>
+                            <li><strong>️ 删除:</strong> 不需要的文件可以删除以节省空间</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+
+</div>
+</div>
+<!-- 使用本地 Bootstrap JS -->
+<script src="/static/bootstrap.bundle.min.js"></script>
+<!-- 自定义JavaScript -->
+<script src="/static/js/app.js"></script>
+</body>
+</html>
+

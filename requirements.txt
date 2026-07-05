@@ -1,0 +1,18 @@
+# ================================
+# 内网打印及扫描服务 - Python依赖
+# ================================
+# 安装命令: pip install -r requirements.txt
+
+# --- 核心依赖 ---
+flask>=2.0              # Web框架，提供HTTP服务和路由
+flask-cors>=3.0         # 跨域请求支持（CORS自动处理）
+waitress>=2.0           # 生产环境WSGI服务器（替代Flask开发服务器）
+pywin32>=300            # Windows API接口（打印机管理、COM对象、系统服务）
+
+# --- 系统托盘 ---
+pystray>=0.19           # 系统托盘图标和菜单
+Pillow>=9.0             # 图像处理（托盘图标绘制）
+
+# --- 打印/扫描功能 ---
+pdf2image>=1.16         # PDF转图片（用于PDF静默打印和BMP转换）
+comtypes>=1.1           # Windows COM类型支持（WIA扫描仪接口）
